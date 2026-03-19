@@ -27,7 +27,9 @@ export function Sidebar() {
   const isAdmin = useAuthStore((state) => state.isAdmin)
   const logout = useAuthStore((state) => state.logout)
   const sidebarCollapsed = useUIStore((state) => state.sidebarCollapsed)
+  const mobileSidebarOpen = useUIStore((state) => state.mobileSidebarOpen)
   const toggleSidebar = useUIStore((state) => state.toggleSidebar)
+  const setMobileSidebarOpen = useUIStore((state) => state.setMobileSidebarOpen)
   const [lowStockCount, setLowStockCount] = useState<number>(0)
 
   useEffect(() => {
@@ -45,27 +47,47 @@ export function Sidebar() {
     () => menuItems.filter((item) => (item.adminOnly ? isAdmin : true)),
     [isAdmin],
   )
+  const desktopCollapsed = sidebarCollapsed
 
   return (
-    <aside
-      className={cn(
-        'fixed left-0 top-0 z-50 flex h-screen flex-col border-r border-[#eef1f1] bg-white pb-5 pt-5 transition-all duration-200',
-        sidebarCollapsed ? 'w-16 px-2' : 'w-[220px] px-4',
-      )}
-    >
-      <div className={cn('flex items-start justify-between', sidebarCollapsed ? 'px-1' : 'px-3')}>
-        <div className={cn(sidebarCollapsed && 'hidden')}>
-          <p className="text-[14px] font-extrabold leading-none text-[#0a7c72]">
+    <>
+      {mobileSidebarOpen ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-40 bg-[#06231f]/30 md:hidden"
+          onClick={() => setMobileSidebarOpen(false)}
+          aria-label="Tutup navigasi"
+        />
+      ) : null}
+      <aside
+        className={cn(
+          'fixed left-0 top-0 z-50 flex h-screen flex-col border-r border-[#eef1f1] bg-white pb-5 pt-4 transition-all duration-200',
+          'w-[min(76vw,288px)] rounded-r-[24px] px-4 shadow-[18px_0_40px_rgba(15,23,42,0.12)] md:w-[220px] md:rounded-r-none md:shadow-none md:translate-x-0',
+          desktopCollapsed ? 'md:w-[56px] md:px-1.5' : 'md:w-[220px] md:px-4',
+          mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
+        )}
+      >
+      <div className={cn('flex items-start justify-between px-1 md:px-0', desktopCollapsed ? 'md:px-0.5' : 'md:px-3')}>
+        <div className={cn(desktopCollapsed ? 'md:hidden' : '')}>
+          <p className="text-[13px] font-extrabold leading-none tracking-[-0.02em] text-[#0a7c72]">
             Toko Plastik Ratih
           </p>
-          <p className="mt-1 text-[10px] font-medium uppercase tracking-[0.14em] text-[#8b9895]">
+          <p className="mt-1 text-[10px] font-medium uppercase tracking-[0.12em] text-[#8b9895]">
             Management System
           </p>
         </div>
         <button
           type="button"
+          onClick={() => setMobileSidebarOpen(false)}
+          className="flex h-9 w-9 items-center justify-center rounded-full text-[#52627d] transition-colors hover:bg-[#f7f9f9] md:hidden"
+          aria-label="Tutup sidebar"
+        >
+          <span className="material-symbols-outlined text-[20px]">close</span>
+        </button>
+        <button
+          type="button"
           onClick={toggleSidebar}
-          className="flex h-9 w-9 items-center justify-center rounded-full text-[#52627d] transition-colors hover:bg-[#f7f9f9]"
+          className="hidden h-9 w-9 items-center justify-center rounded-full text-[#52627d] transition-colors hover:bg-[#f7f9f9] md:flex"
           aria-label={sidebarCollapsed ? 'Buka sidebar' : 'Tutup sidebar'}
         >
           <span className="material-symbols-outlined text-[20px]">
@@ -74,40 +96,45 @@ export function Sidebar() {
         </button>
       </div>
 
-      {sidebarCollapsed ? (
-        <div className="mt-3 flex justify-center">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#e7f8f6] text-[#0a7c72]">
+      {desktopCollapsed ? (
+        <div className="mt-3 hidden justify-center md:flex">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#eef8f6] text-[#0a7c72]">
             <span className="material-symbols-outlined text-[18px]">storefront</span>
           </div>
         </div>
       ) : null}
 
-      <nav className="mt-8 flex-1 space-y-1">
+      <nav className="mt-6 flex-1 space-y-1.5">
         {visibleMenus.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
+            onClick={() => setMobileSidebarOpen(false)}
             className={({ isActive }) =>
               cn(
-                'flex items-center rounded-[14px] text-[15px] transition-colors duration-200',
-                sidebarCollapsed ? 'justify-center px-0 py-3' : 'gap-3 px-4 py-3',
+                'flex items-center rounded-[16px] text-[14px] transition-colors duration-200',
+                desktopCollapsed
+                  ? 'gap-3 px-4 py-3 md:mx-auto md:h-11 md:w-11 md:justify-center md:rounded-[14px] md:px-0 md:py-0'
+                  : 'gap-3 px-4 py-3',
                 isActive
-                  ? 'bg-[#e7f8f6] font-semibold text-[#0a7c72]'
+                  ? 'bg-[#eef8f6] font-semibold text-[#0a7c72]'
                   : 'font-medium text-[#52627d] hover:bg-[#f7f9f9]',
               )
             }
-            title={sidebarCollapsed ? item.label : undefined}
+            title={desktopCollapsed ? item.label : undefined}
           >
             {({ isActive }) => (
               <>
                 <span
-                  className="material-symbols-outlined"
+                  className={cn('material-symbols-outlined', desktopCollapsed && 'md:text-[20px]')}
                   style={{ fontVariationSettings: isActive ? "'FILL' 1" : "'FILL' 0" }}
                 >
                   {item.icon}
                 </span>
-                {!sidebarCollapsed ? <span>{item.label}</span> : null}
-                {!sidebarCollapsed && item.path === '/stok' && lowStockCount > 0 ? (
+                <span className={cn('truncate', desktopCollapsed ? 'md:hidden' : '')}>
+                  {item.label}
+                </span>
+                {!desktopCollapsed && item.path === '/stok' && lowStockCount > 0 ? (
                   <Badge className="ml-auto" variant="warning">
                     {lowStockCount}
                   </Badge>
@@ -119,7 +146,7 @@ export function Sidebar() {
       </nav>
 
       <div className="mt-auto border-t border-[#eef1f1] pt-4">
-        {!sidebarCollapsed ? (
+        {!desktopCollapsed ? (
           <div className="px-4 py-2">
             <p className="text-sm font-bold text-on-surface">{user?.nama ?? 'Pengguna'}</p>
             <p className="mt-1 text-[10px] font-medium uppercase tracking-[0.16em] text-outline">
@@ -127,25 +154,33 @@ export function Sidebar() {
             </p>
           </div>
         ) : (
-          <div className="flex justify-center px-1 py-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#e7f8f6] text-[#0a7c72]">
+          <div className="hidden justify-center px-1 py-2 md:flex">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#eef8f6] text-[#0a7c72]">
               <span className="material-symbols-outlined text-[18px]">person</span>
             </div>
           </div>
         )}
         <button
           type="button"
-          onClick={() => void logout()}
+          onClick={() => {
+            setMobileSidebarOpen(false)
+            void logout()
+          }}
           className={cn(
-            'mt-2 flex w-full items-center rounded-[14px] text-[#df3d2f] transition-colors duration-200 hover:bg-[#fff1ed]',
-            sidebarCollapsed ? 'justify-center px-0 py-3' : 'gap-3 px-4 py-3',
+            'mt-2 flex w-full items-center rounded-[16px] text-[#df3d2f] transition-colors duration-200 hover:bg-[#fff1ed]',
+            desktopCollapsed
+              ? 'gap-3 px-4 py-3 md:mx-auto md:h-11 md:w-11 md:justify-center md:rounded-[14px] md:px-0 md:py-0'
+              : 'gap-3 px-4 py-3',
           )}
-          title={sidebarCollapsed ? 'Keluar' : undefined}
+          title={desktopCollapsed ? 'Keluar' : undefined}
         >
-          <span className="material-symbols-outlined text-[20px]">logout</span>
-          {!sidebarCollapsed ? <span className="font-medium">Keluar</span> : null}
+          <span className={cn('material-symbols-outlined text-[20px]', desktopCollapsed && 'md:text-[20px]')}>
+            logout
+          </span>
+          <span className={cn('font-medium', desktopCollapsed ? 'md:hidden' : '')}>Keluar</span>
         </button>
       </div>
-    </aside>
+      </aside>
+    </>
   )
 }

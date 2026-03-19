@@ -1,15 +1,18 @@
 import { supabase } from '../lib/supabase'
 import type {
   MetodeBayar,
+  PaymentStatus,
   StatusTransaksi,
   Transaction,
   TransactionItem,
+  TransactionWithKasir,
 } from '../types/database'
 
 export interface TransactionFilters {
   dateFrom?: string
   dateTo?: string
   metodeBayar?: MetodeBayar
+  paymentStatus?: PaymentStatus
   status?: StatusTransaksi
   kasirId?: string
   search?: string
@@ -73,6 +76,10 @@ export async function getTransactions(
 
   if (filters.metodeBayar) {
     query = query.eq('metode_bayar', filters.metodeBayar)
+  }
+
+  if (filters.paymentStatus) {
+    query = query.eq('payment_status', filters.paymentStatus)
   }
 
   if (filters.status) {
@@ -178,6 +185,71 @@ export async function createTransaction(
 
   if (!detail) {
     throw new Error('Detail transaksi yang baru dibuat tidak ditemukan')
+  }
+
+  return detail
+}
+
+export async function getPendingTransactions(): Promise<TransactionWithKasir[]> {
+  const today = new Date()
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString()
+  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString()
+
+  const { data, error } = await supabase
+    .from('transactions_with_kasir')
+    .select('*')
+    .eq('status', 'selesai')
+    .eq('payment_status', 'menunggu_konfirmasi')
+    .gte('created_at', start)
+    .lt('created_at', end)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return data ?? []
+}
+
+export async function confirmTransactionPayment(
+  id: number,
+  paymentReference?: string | null,
+): Promise<TransactionDetail> {
+  const { error } = await supabase.rpc('confirm_transaction_payment', {
+    p_transaction_id: id,
+    p_payment_reference: paymentReference ?? null,
+  })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  const detail = await getTransactionById(id)
+
+  if (!detail) {
+    throw new Error('Detail transaksi yang dikonfirmasi tidak ditemukan')
+  }
+
+  return detail
+}
+
+export async function cancelPendingTransaction(
+  id: number,
+  reason?: string | null,
+): Promise<TransactionDetail> {
+  const { error } = await supabase.rpc('cancel_pending_transaction', {
+    p_transaction_id: id,
+    p_reason: reason ?? null,
+  })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  const detail = await getTransactionById(id)
+
+  if (!detail) {
+    throw new Error('Detail transaksi yang dibatalkan tidak ditemukan')
   }
 
   return detail

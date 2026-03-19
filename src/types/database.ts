@@ -1,7 +1,8 @@
 export type UserRole = 'admin' | 'kasir'
 export type SatuanType = 'pcs' | 'lusin' | 'kg' | 'meter' | 'pack'
-export type MetodeBayar = 'tunai' | 'transfer' | 'qris' | 'debit'
+export type MetodeBayar = 'tunai' | 'transfer' | 'qris'
 export type StatusTransaksi = 'selesai' | 'batal'
+export type PaymentStatus = 'menunggu_konfirmasi' | 'dibayar' | 'gagal'
 export type JenisAdjustment = 'masuk' | 'keluar' | 'koreksi' | 'terjual'
 export type StokStatus = 'aman' | 'menipis' | 'habis'
 
@@ -132,6 +133,10 @@ export interface Database {
           kembalian: number | null
           catatan: string | null
           status: StatusTransaksi | null
+          payment_status: PaymentStatus
+          paid_at: string | null
+          confirmed_by: string | null
+          payment_reference: string | null
           created_at: string | null
         }
         Insert: {
@@ -149,6 +154,10 @@ export interface Database {
           kembalian?: number | null
           catatan?: string | null
           status?: StatusTransaksi | null
+          payment_status?: PaymentStatus
+          paid_at?: string | null
+          confirmed_by?: string | null
+          payment_reference?: string | null
           created_at?: string | null
         }
         Update: {
@@ -166,6 +175,10 @@ export interface Database {
           kembalian?: number | null
           catatan?: string | null
           status?: StatusTransaksi | null
+          payment_status?: PaymentStatus
+          paid_at?: string | null
+          confirmed_by?: string | null
+          payment_reference?: string | null
           created_at?: string | null
         }
         Relationships: []
@@ -300,8 +313,13 @@ export interface Database {
           kembalian: number | null
           catatan: string | null
           status: StatusTransaksi | null
+          payment_status: PaymentStatus | null
+          paid_at: string | null
+          confirmed_by: string | null
+          payment_reference: string | null
           created_at: string | null
           kasir_nama: string | null
+          confirmed_by_nama: string | null
           jumlah_item: number | null
         }
         Relationships: []
@@ -326,6 +344,28 @@ export interface Database {
         Returns: {
           transaction_id: number
           nomor_nota: string
+          payment_status: PaymentStatus
+        }
+      }
+      confirm_transaction_payment: {
+        Args: {
+          p_transaction_id: number
+          p_payment_reference?: string | null
+        }
+        Returns: {
+          transaction_id: number
+          payment_status: PaymentStatus
+        }
+      }
+      cancel_pending_transaction: {
+        Args: {
+          p_transaction_id: number
+          p_reason?: string | null
+        }
+        Returns: {
+          transaction_id: number
+          status: StatusTransaksi
+          payment_status: PaymentStatus
         }
       }
       generate_nomor_nota: {
@@ -362,6 +402,7 @@ export interface Database {
       satuan_type: SatuanType
       metode_bayar: MetodeBayar
       status_transaksi: StatusTransaksi
+      payment_status: PaymentStatus
       jenis_adjustment: JenisAdjustment
     }
     CompositeTypes: {

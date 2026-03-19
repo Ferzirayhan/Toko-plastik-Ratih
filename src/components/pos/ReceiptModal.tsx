@@ -61,7 +61,7 @@ export function ReceiptModal({
         style: 'currency',
         currency: 'IDR',
         maximumFractionDigits: 0,
-      }).format(Number(transaction.uang_diterima ?? 0))}`,
+      }).format(Number(transaction.uang_diterima ?? transaction.total ?? 0))}`,
       `Kembalian: ${new Intl.NumberFormat('id-ID', {
         style: 'currency',
         currency: 'IDR',
@@ -76,23 +76,31 @@ export function ReceiptModal({
     return null
   }
 
+  const isPaid = transaction.payment_status === 'dibayar'
+
   return (
     <Modal
       open={open}
       onClose={onClose}
       size="md"
-      title="Pembayaran Berhasil!"
+      title={isPaid ? 'Pembayaran Berhasil!' : 'Pembayaran Menunggu Konfirmasi'}
       description={`Transaksi ${transaction.nomor_nota}`}
     >
       <div className="space-y-6">
         <div className="flex flex-col items-center text-center">
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#dff2ef]">
-            <span className="material-symbols-outlined text-[42px] text-[#0a7c72]">
-              check
+          <div className={isPaid
+            ? 'flex h-20 w-20 items-center justify-center rounded-full bg-[#dff2ef]'
+            : 'flex h-20 w-20 items-center justify-center rounded-full bg-[#fff5e8]'}>
+            <span className={isPaid
+              ? 'material-symbols-outlined text-[42px] text-[#0a7c72]'
+              : 'material-symbols-outlined text-[42px] text-[#855300]'}>
+              {isPaid ? 'check' : 'schedule'}
             </span>
           </div>
           <p className="mt-4 text-sm font-medium text-[#6d7a77]">
-            Pembayaran berhasil diproses dan struk siap dicetak.
+            {isPaid
+              ? 'Pembayaran berhasil diproses dan struk siap dicetak.'
+              : 'Pembayaran belum dikonfirmasi, jadi struk belum bisa dicetak.'}
           </p>
         </div>
 
@@ -105,6 +113,14 @@ export function ReceiptModal({
               </span>
             </div>
             <div className="flex items-center justify-between">
+              <span className="font-medium text-[#6d7a77]">Status Pembayaran</span>
+              <span className={isPaid
+                ? 'rounded-full bg-[#ccfaf1] px-3 py-1 text-[10px] font-extrabold uppercase text-[#0a7c72]'
+                : 'rounded-full bg-[#fff5e8] px-3 py-1 text-[10px] font-extrabold uppercase text-[#855300]'}>
+                {transaction.payment_status.replaceAll('_', ' ')}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
               <span className="font-medium text-[#6d7a77]">Total Belanja</span>
               <CurrencyDisplay className="font-bold text-[#1b1e20]" value={Number(transaction.total)} />
             </div>
@@ -112,7 +128,7 @@ export function ReceiptModal({
               <span className="font-medium text-[#6d7a77]">Bayar</span>
               <CurrencyDisplay
                 className="font-bold text-[#1b1e20]"
-                value={Number(transaction.uang_diterima ?? 0)}
+                value={Number(transaction.uang_diterima ?? transaction.total ?? 0)}
               />
             </div>
             <div className="flex items-center justify-between">
@@ -142,13 +158,18 @@ export function ReceiptModal({
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
-          <Button className="rounded-[14px]" onClick={() => void handlePrint()}>
+          <Button
+            className="rounded-[14px]"
+            onClick={() => void handlePrint()}
+            disabled={!isPaid}
+          >
             Cetak Struk
           </Button>
           <Button
             variant="secondary"
             className="rounded-[14px]"
             onClick={() => window.open(buildWhatsAppUrl(whatsappText), '_blank')}
+            disabled={!isPaid}
           >
             Kirim WhatsApp
           </Button>

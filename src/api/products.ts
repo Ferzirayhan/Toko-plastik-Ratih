@@ -188,9 +188,24 @@ export async function deleteCategory(id: number): Promise<Category> {
   }
 
   if ((count ?? 0) > 0) {
-    throw new Error('Kategori masih dipakai produk. Pindahkan atau nonaktifkan produknya dulu.')
+    throw new Error('Kategori masih dipakai produk. Hapus atau pindahkan semua produknya dulu.')
   }
 
+  const { data, error } = await supabase
+    .from('categories')
+    .delete()
+    .eq('id', id)
+    .select('*')
+    .single()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return data
+}
+
+export async function archiveCategory(id: number): Promise<Category> {
   const { data, error } = await supabase
     .from('categories')
     .update({ is_active: false })
@@ -215,6 +230,9 @@ export async function createProduct(
     .single()
 
   if (error) {
+    if (error.code === '23505') {
+      throw new Error('SKU atau barcode sudah dipakai produk lain.')
+    }
     throw new Error(error.message)
   }
 
@@ -233,6 +251,9 @@ export async function updateProduct(
     .single()
 
   if (error) {
+    if (error.code === '23505') {
+      throw new Error('SKU atau barcode sudah dipakai produk lain.')
+    }
     throw new Error(error.message)
   }
 
@@ -258,6 +279,47 @@ export async function uploadProductPhoto(file: File): Promise<string> {
 }
 
 export async function deleteProduct(id: number): Promise<Product> {
+  const [{ count: transactionItemCount, error: transactionItemError }, { count: adjustmentCount, error: adjustmentError }] =
+    await Promise.all([
+      supabase
+        .from('transaction_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('product_id', id),
+      supabase
+        .from('stock_adjustments')
+        .select('id', { count: 'exact', head: true })
+        .eq('product_id', id),
+    ])
+
+  if (transactionItemError) {
+    throw new Error(transactionItemError.message)
+  }
+
+  if (adjustmentError) {
+    throw new Error(adjustmentError.message)
+  }
+
+  if ((transactionItemCount ?? 0) > 0 || (adjustmentCount ?? 0) > 0) {
+    throw new Error(
+      'Produk ini sudah punya riwayat transaksi atau stok, jadi tidak bisa dihapus permanen. Ubah status aktif dari edit produk jika ingin menyembunyikannya.',
+    )
+  }
+
+  const { data, error } = await supabase
+    .from('products')
+    .delete()
+    .eq('id', id)
+    .select('*')
+    .single()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return data
+}
+
+export async function archiveProduct(id: number): Promise<Product> {
   const { data, error } = await supabase
     .from('products')
     .update({ is_active: false })

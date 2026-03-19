@@ -267,12 +267,12 @@ export function StockPage() {
   return (
     <main
       className={cn(
-        'min-h-screen bg-[#f7f9f9] transition-[margin] duration-200',
-        sidebarCollapsed ? 'ml-16' : 'ml-[220px]',
+        'min-h-screen bg-[#f7f9f9] pt-16 transition-[margin] duration-200 md:pt-0',
+        sidebarCollapsed ? 'md:ml-16' : 'md:ml-[220px]',
       )}
     >
-      <div className="min-h-screen rounded-l-[24px] bg-white">
-        <header className="flex items-center justify-between border-b border-[#eef1f1] px-6 py-4">
+      <div className="min-h-screen bg-white md:rounded-l-[24px]">
+        <header className="flex flex-col gap-3 border-b border-[#eef1f1] px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-[28px] font-extrabold tracking-[-0.03em] text-[#1b1e20]">
               Manajemen Stok
@@ -286,8 +286,8 @@ export function StockPage() {
           </div>
         </header>
 
-        <div className="space-y-6 bg-[#f7f9f9] px-6 py-6">
-          <section className="grid grid-cols-3 gap-4">
+        <div className="space-y-6 bg-[#f7f9f9] px-4 py-4 sm:px-6 sm:py-6">
+          <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             {[
               ['Total Produk', stockSummary.total],
               ['Stok Menipis', stockSummary.menipis],
@@ -309,7 +309,7 @@ export function StockPage() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Cari produk atau SKU..."
-                className="h-11 min-w-[240px] rounded-[12px] border-none bg-[#f1f3f5] px-4 text-sm outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+                className="h-11 w-full min-w-0 rounded-[12px] border-none bg-[#f1f3f5] px-4 text-sm outline-none focus:ring-2 focus:ring-[#0a7c72]/15 sm:min-w-[240px] sm:w-auto"
               />
               {[
                 ['all', 'Semua Produk'],
@@ -335,7 +335,7 @@ export function StockPage() {
             <div className="border-b border-[#eef1f1] px-5 py-4">
               <h2 className="text-[18px] font-extrabold text-[#1b1e20]">Daftar Inventaris</h2>
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto hidden md:block">
               <table className="min-w-full">
                 <thead className="bg-[#f7f9f9]">
                   <tr>
@@ -427,6 +427,81 @@ export function StockPage() {
                 </tbody>
               </table>
             </div>
+
+            {!loading ? (
+              <div className="space-y-4 p-4 md:hidden">
+                {products.map((product) => (
+                  <article key={product.id} className="rounded-[18px] border border-[#eef1f1] bg-[#fbfdfd] p-4 shadow-[0_6px_18px_rgba(15,23,42,0.04)]">
+                    <div className="flex items-start gap-3">
+                      {product.foto_url ? (
+                        <img src={product.foto_url} alt={product.nama ?? 'Produk'} className="h-14 w-14 rounded-[14px] object-cover" />
+                      ) : (
+                        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[14px] bg-[#e7f8f6] text-[#0a7c72]">
+                          <span className="material-symbols-outlined">inventory_2</span>
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="line-clamp-2 font-extrabold text-[#1b1e20]">{product.nama ?? '-'}</p>
+                        <p className="mt-1 text-xs text-[#8b9895]">SKU: {product.sku ?? '-'}</p>
+                        <p className="text-xs text-[#8b9895]">{product.category_nama ?? '-'}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <p className="text-[#8b9895]">Stok Saat Ini</p>
+                        <p className="font-bold text-[#1b1e20]">{product.stok ?? 0} {product.satuan ?? ''}</p>
+                      </div>
+                      <div>
+                        <p className="text-[#8b9895]">Stok Minimum</p>
+                        <p className="font-bold text-[#1b1e20]">{product.stok_minimum ?? 0} {product.satuan ?? ''}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-3">
+                      <span className={product.stok_status === 'habis'
+                        ? 'rounded-full bg-[#ffdad6] px-3 py-1 text-[10px] font-extrabold uppercase text-[#ba1a1a]'
+                        : product.stok_status === 'menipis'
+                          ? 'rounded-full bg-[#ffddb8] px-3 py-1 text-[10px] font-extrabold uppercase text-[#855300]'
+                          : 'rounded-full bg-[#ccfaf1] px-3 py-1 text-[10px] font-extrabold uppercase text-[#0a7c72]'}>
+                        {product.stok_status ?? 'aman'}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openAdjustment(product)}
+                        className="rounded-[12px] bg-[#e7f8f6] px-3 py-2 text-xs font-bold text-[#0a7c72]"
+                      >
+                        Adjust
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openEdit(product)}
+                        className="rounded-[12px] bg-[#eef3f3] px-3 py-2 text-xs font-bold text-[#52627d]"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void openHistory(product)}
+                        className="rounded-[12px] bg-[#eef3f3] px-3 py-2 text-xs font-bold text-[#52627d]"
+                      >
+                        Riwayat
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteTarget(product)}
+                        className="rounded-[12px] bg-[#fff1ed] px-3 py-2 text-xs font-bold text-[#ba1a1a]"
+                      >
+                        Hapus
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : null}
           </section>
         </div>
       </div>

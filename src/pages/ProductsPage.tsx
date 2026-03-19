@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import {
+  archiveCategory,
+  archiveProduct,
   createCategory,
   createProduct,
   deleteCategory,
@@ -105,8 +107,10 @@ interface CategoryManagerProps {
 function CategoryManager({ open, categories, onClose, onSaved }: CategoryManagerProps) {
   const pushToast = useToastStore((state) => state.pushToast)
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
+  const [archiveTarget, setArchiveTarget] = useState<Category | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Category | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [archiveLoading, setArchiveLoading] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const {
     register,
@@ -186,8 +190,8 @@ function CategoryManager({ open, categories, onClose, onSaved }: CategoryManager
         reset({ nama: '', deskripsi: '', is_active: true })
       }
       pushToast({
-        title: 'Kategori dinonaktifkan',
-        description: `${deleteTarget.nama ?? 'Kategori'} berhasil dipindahkan ke nonaktif.`,
+        title: 'Kategori dihapus',
+        description: `${deleteTarget.nama ?? 'Kategori'} berhasil dihapus permanen.`,
         variant: 'success',
       })
       setDeleteTarget(null)
@@ -202,6 +206,39 @@ function CategoryManager({ open, categories, onClose, onSaved }: CategoryManager
     }
   }
 
+  const handleArchiveCategory = async () => {
+    if (!archiveTarget?.id) {
+      return
+    }
+
+    setArchiveLoading(true)
+
+    try {
+      await archiveCategory(archiveTarget.id)
+      await onSaved()
+      if (selectedCategory?.id === archiveTarget.id) {
+        setSelectedCategory({
+          ...archiveTarget,
+          is_active: false,
+        })
+      }
+      pushToast({
+        title: 'Kategori diarsipkan',
+        description: `${archiveTarget.nama ?? 'Kategori'} dipindahkan ke status nonaktif.`,
+        variant: 'success',
+      })
+      setArchiveTarget(null)
+    } catch (error) {
+      pushToast({
+        title: 'Gagal mengarsipkan kategori',
+        description: error instanceof Error ? error.message : 'Kategori belum berhasil diarsipkan.',
+        variant: 'error',
+      })
+    } finally {
+      setArchiveLoading(false)
+    }
+  }
+
   return (
     <>
       <Modal
@@ -211,7 +248,7 @@ function CategoryManager({ open, categories, onClose, onSaved }: CategoryManager
           onClose()
         }}
         title="Kelola Kategori"
-        description="Tambah, edit, atau nonaktifkan kategori produk."
+        description="Tambah, edit, arsipkan, atau hapus kategori produk."
         size="lg"
       >
         <div className="grid gap-6 md:grid-cols-[260px_minmax(0,1fr)]">
@@ -297,15 +334,25 @@ function CategoryManager({ open, categories, onClose, onSaved }: CategoryManager
               Kategori aktif dan bisa dipilih saat tambah produk
             </label>
 
-            <div className="flex justify-between gap-3 pt-4">
-              <button
-                type="button"
-                disabled={!selectedCategory}
-                onClick={() => selectedCategory && setDeleteTarget(selectedCategory)}
-                className="rounded-[14px] bg-[#fff1ed] px-5 py-3 font-bold text-[#ba1a1a] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Nonaktifkan
-              </button>
+            <div className="flex flex-wrap justify-between gap-3 pt-4">
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  disabled={!selectedCategory}
+                  onClick={() => selectedCategory && setArchiveTarget(selectedCategory)}
+                  className="rounded-[14px] bg-[#eef3f3] px-5 py-3 font-bold text-[#52627d] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Arsipkan
+                </button>
+                <button
+                  type="button"
+                  disabled={!selectedCategory}
+                  onClick={() => selectedCategory && setDeleteTarget(selectedCategory)}
+                  className="rounded-[14px] bg-[#fff1ed] px-5 py-3 font-bold text-[#ba1a1a] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Hapus
+                </button>
+              </div>
               <button
                 type="submit"
                 disabled={submitting}
@@ -319,10 +366,21 @@ function CategoryManager({ open, categories, onClose, onSaved }: CategoryManager
       </Modal>
 
       <ConfirmDialog
+        open={Boolean(archiveTarget)}
+        title="Arsipkan kategori?"
+        description={`Kategori ${archiveTarget?.nama ?? ''} akan disembunyikan dari pilihan aktif, tapi datanya tetap tersimpan.`}
+        confirmLabel="Arsipkan"
+        loading={archiveLoading}
+        onCancel={() => setArchiveTarget(null)}
+        onConfirm={() => void handleArchiveCategory()}
+      />
+
+      <ConfirmDialog
         open={Boolean(deleteTarget)}
-        title="Nonaktifkan kategori?"
-        description={`Kategori ${deleteTarget?.nama ?? ''} akan disembunyikan dari pilihan kategori.`}
-        confirmLabel="Nonaktifkan"
+        title="Hapus kategori?"
+        description={`Kategori ${deleteTarget?.nama ?? ''} akan dihapus permanen dari sistem.`}
+        confirmLabel="Hapus"
+        variant="danger"
         loading={deleteLoading}
         onCancel={() => setDeleteTarget(null)}
         onConfirm={() => void handleDeleteCategory()}
@@ -693,9 +751,11 @@ export function ProductsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [categoryManagerOpen, setCategoryManagerOpen] = useState(false)
   const [barcodeOpen, setBarcodeOpen] = useState(false)
+  const [archiveLoading, setArchiveLoading] = useState(false)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<ProductWithCategory | null>(null)
   const [barcodeProduct, setBarcodeProduct] = useState<ProductWithCategory | null>(null)
+  const [archiveProductTarget, setArchiveProductTarget] = useState<ProductWithCategory | null>(null)
   const [deleteProductTarget, setDeleteProductTarget] = useState<ProductWithCategory | null>(null)
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
@@ -844,14 +904,14 @@ export function ProductsPage() {
       await loadProducts()
       setDeleteProductTarget(null)
       pushToast({
-        title: 'Produk dinonaktifkan',
-        description: `${deletedName} dipindahkan ke status nonaktif dan tidak tampil di katalog aktif.`,
+        title: 'Produk dihapus',
+        description: `${deletedName} berhasil dihapus permanen dari katalog.`,
         variant: 'success',
       })
     } catch (error) {
       pushToast({
         title: 'Gagal menghapus produk',
-        description: error instanceof Error ? error.message : 'Produk belum berhasil dinonaktifkan.',
+        description: error instanceof Error ? error.message : 'Produk belum berhasil dihapus.',
         variant: 'error',
       })
     } finally {
@@ -859,16 +919,48 @@ export function ProductsPage() {
     }
   }
 
+  const handleArchiveProduct = async () => {
+    if (!archiveProductTarget?.id) {
+      return
+    }
+
+    const archivedId = archiveProductTarget.id
+    const archivedName = archiveProductTarget.nama ?? 'Produk'
+    setArchiveLoading(true)
+
+    try {
+      await archiveProduct(archivedId)
+      setProducts((current) => current.filter((product) => product.id !== archivedId))
+      setTotalCount((current) => Math.max(0, current - 1))
+      setStatusFilter('active')
+      await loadProducts()
+      setArchiveProductTarget(null)
+      pushToast({
+        title: 'Produk diarsipkan',
+        description: `${archivedName} dipindahkan ke status nonaktif.`,
+        variant: 'success',
+      })
+    } catch (error) {
+      pushToast({
+        title: 'Gagal mengarsipkan produk',
+        description: error instanceof Error ? error.message : 'Produk belum berhasil diarsipkan.',
+        variant: 'error',
+      })
+    } finally {
+      setArchiveLoading(false)
+    }
+  }
+
   return (
     <main
       className={cn(
-        'min-h-screen bg-[#f7f9f9] transition-[margin] duration-200',
-        sidebarCollapsed ? 'ml-16' : 'ml-[220px]',
+        'min-h-screen bg-[#f7f9f9] pt-16 transition-[margin] duration-200 md:pt-0',
+        sidebarCollapsed ? 'md:ml-16' : 'md:ml-[220px]',
       )}
     >
-      <div className="min-h-screen rounded-l-[24px] bg-white">
-        <header className="flex items-center justify-between border-b border-[#eef1f1] px-6 py-4">
-          <div className="relative w-full max-w-[320px]">
+      <div className="min-h-screen bg-white md:rounded-l-[24px]">
+        <header className="flex flex-col gap-3 border-b border-[#eef1f1] px-4 py-4 sm:px-6 xl:flex-row xl:items-center xl:justify-between">
+          <div className="relative w-full xl:max-w-[320px]">
             <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a19f]">
               search
             </span>
@@ -881,31 +973,33 @@ export function ProductsPage() {
             />
           </div>
 
-          <button
-            type="button"
-            onClick={() => setCategoryManagerOpen(true)}
-            className="flex items-center gap-2 rounded-[14px] bg-white px-5 py-3 font-bold text-[#0a7c72] shadow-[0_8px_18px_rgba(15,23,42,0.06)]"
-          >
-            <span className="material-symbols-outlined text-[18px]">category</span>
-            Kelola Kategori
-          </button>
+          <div className="flex flex-col gap-3 sm:flex-row xl:justify-end">
+            <button
+              type="button"
+              onClick={() => setCategoryManagerOpen(true)}
+              className="flex items-center justify-center gap-2 rounded-[14px] bg-white px-5 py-3 font-bold text-[#0a7c72] shadow-[0_8px_18px_rgba(15,23,42,0.06)]"
+            >
+              <span className="material-symbols-outlined text-[18px]">category</span>
+              Kelola Kategori
+            </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedProduct(null)
-              setDrawerOpen(true)
-            }}
-            disabled={categories.length === 0}
-            className="flex items-center gap-2 rounded-[14px] bg-[#0a7c72] px-5 py-3 font-bold text-white shadow-[0_12px_24px_rgba(10,124,114,0.22)]"
-          >
-            <span className="material-symbols-outlined text-[18px]">add</span>
-            Tambah Produk
-          </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedProduct(null)
+                setDrawerOpen(true)
+              }}
+              disabled={categories.length === 0}
+              className="flex items-center justify-center gap-2 rounded-[14px] bg-[#0a7c72] px-5 py-3 font-bold text-white shadow-[0_12px_24px_rgba(10,124,114,0.22)]"
+            >
+              <span className="material-symbols-outlined text-[18px]">add</span>
+              Tambah Produk
+            </button>
+          </div>
         </header>
 
-        <div className="space-y-6 bg-[#f7f9f9] px-6 py-6">
-          <section className="flex items-end justify-between">
+        <div className="space-y-6 bg-[#f7f9f9] px-4 py-4 sm:px-6 sm:py-6">
+          <section className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h1 className="text-[28px] font-extrabold tracking-[-0.03em] text-[#1b1e20]">
                 Manajemen Produk
@@ -916,7 +1010,7 @@ export function ProductsPage() {
             </div>
           </section>
 
-          <section className="grid grid-cols-4 gap-4">
+          <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {statCards.map((card) => (
               <div key={card.label} className={cn('rounded-[18px] border-l-4 bg-white p-5 shadow-[0_6px_24px_rgba(15,23,42,0.04)]', card.color)}>
                 <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
@@ -975,7 +1069,7 @@ export function ProductsPage() {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto hidden md:block">
               <table className="min-w-full">
                 <thead className="bg-[#f7f9f9]">
                   <tr>
@@ -1099,6 +1193,13 @@ export function ProductsPage() {
                                 </button>
                                 <button
                                   type="button"
+                                  onClick={() => setArchiveProductTarget(product)}
+                                  className="rounded-[12px] p-2 text-[#52627d] hover:bg-[#eef3f3]"
+                                >
+                                  <span className="material-symbols-outlined text-[18px]">visibility_off</span>
+                                </button>
+                                <button
+                                  type="button"
                                   onClick={() => setDeleteProductTarget(product)}
                                   className="rounded-[12px] p-2 text-[#ba1a1a] hover:bg-[#fff1ed]"
                                 >
@@ -1114,6 +1215,107 @@ export function ProductsPage() {
               </table>
             </div>
 
+            {!loading ? (
+              <div className="space-y-4 p-4 md:hidden">
+                {products.length > 0 ? (
+                  products.map((product) => {
+                    const hargaBeli = Number(product.harga_beli ?? 0)
+                    const hargaJual = Number(product.harga_jual ?? 0)
+                    const margin = hargaBeli > 0 ? ((hargaJual - hargaBeli) / hargaBeli) * 100 : 0
+
+                    return (
+                      <article key={product.id} className="rounded-[18px] border border-[#eef1f1] bg-[#fbfdfd] p-4 shadow-[0_6px_18px_rgba(15,23,42,0.04)]">
+                        <div className="flex items-start gap-3">
+                          {product.foto_url ? (
+                            <img src={product.foto_url} alt={product.nama ?? 'Produk'} className="h-14 w-14 rounded-[14px] object-cover" />
+                          ) : (
+                            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[14px] bg-[#e7f8f6] text-[#0a7c72]">
+                              <span className="material-symbols-outlined">inventory_2</span>
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="line-clamp-2 font-extrabold text-[#1b1e20]">{product.nama ?? '-'}</p>
+                            <p className="mt-1 text-xs text-[#8b9895]">SKU: {product.sku ?? '-'}</p>
+                            <p className="text-xs text-[#8b9895]">Barcode: {product.barcode ?? '-'}</p>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <p className="text-[#8b9895]">Kategori</p>
+                            <p className="font-bold text-[#1b1e20]">{product.category_nama ?? 'Tanpa kategori'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[#8b9895]">Stok</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-bold text-[#1b1e20]">{product.stok ?? 0}</p>
+                              <span
+                                className={cn(
+                                  'rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase',
+                                  product.stok_status === 'habis' && 'bg-[#ffdad6] text-[#ba1a1a]',
+                                  product.stok_status === 'menipis' && 'bg-[#ffddb8] text-[#855300]',
+                                  product.stok_status === 'aman' && 'bg-[#ccfaf1] text-[#0a7c72]',
+                                )}
+                              >
+                                {product.stok_status ?? 'aman'}
+                              </span>
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-[#8b9895]">Harga Beli</p>
+                            <p className="font-bold text-[#1b1e20]">{formatRupiah(hargaBeli)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[#8b9895]">Harga Jual</p>
+                            <p className="font-bold text-[#0a7c72]">{formatRupiah(hargaJual)}</p>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 flex items-center justify-between text-sm">
+                          <span className="text-[#8b9895]">Margin</span>
+                          <span className="font-bold text-[#1b1e20]">{margin.toFixed(1)}%</span>
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                          <button
+                            type="button"
+                            onClick={() => handleEdit(product)}
+                            className="rounded-[12px] bg-[#e7f8f6] px-3 py-2 text-xs font-bold text-[#0a7c72]"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBarcodeProduct(product)
+                              setBarcodeOpen(true)
+                            }}
+                            className="rounded-[12px] bg-[#fff7ed] px-3 py-2 text-xs font-bold text-[#a86b00]"
+                          >
+                            Barcode
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setArchiveProductTarget(product)}
+                            className="rounded-[12px] bg-[#eef3f3] px-3 py-2 text-xs font-bold text-[#52627d]"
+                          >
+                            Arsipkan
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteProductTarget(product)}
+                            className="rounded-[12px] bg-[#fff1ed] px-3 py-2 text-xs font-bold text-[#ba1a1a]"
+                          >
+                            Hapus
+                          </button>
+                        </div>
+                      </article>
+                    )
+                  })
+                ) : null}
+              </div>
+            ) : null}
+
             {!loading && products.length === 0 ? (
               <div className="px-6 py-14 text-center">
                 <p className="text-lg font-extrabold text-[#1b1e20]">Produk tidak ditemukan</p>
@@ -1123,7 +1325,7 @@ export function ProductsPage() {
               </div>
             ) : null}
 
-            <div className="flex items-center justify-between border-t border-[#eef1f1] px-5 py-4">
+            <div className="flex flex-col gap-3 border-t border-[#eef1f1] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-[#8b9895]">
                 Menampilkan {products.length === 0 ? 0 : (page - 1) * pageSize + 1}-
                 {Math.min(page * pageSize, totalCount)} dari {totalCount} produk
@@ -1200,10 +1402,21 @@ export function ProductsPage() {
       </Modal>
 
       <ConfirmDialog
+        open={Boolean(archiveProductTarget)}
+        title="Arsipkan produk?"
+        description={`Produk ${archiveProductTarget?.nama ?? ''} akan disembunyikan dari katalog aktif, tapi datanya tetap tersimpan.`}
+        confirmLabel="Arsipkan"
+        loading={archiveLoading}
+        onCancel={() => setArchiveProductTarget(null)}
+        onConfirm={() => void handleArchiveProduct()}
+      />
+
+      <ConfirmDialog
         open={Boolean(deleteProductTarget)}
-        title="Nonaktifkan produk?"
-        description={`Produk ${deleteProductTarget?.nama ?? ''} akan disembunyikan dari katalog kasir.`}
-        confirmLabel="Nonaktifkan"
+        title="Hapus produk?"
+        description={`Produk ${deleteProductTarget?.nama ?? ''} akan dihapus permanen dari katalog.`}
+        confirmLabel="Hapus"
+        variant="danger"
         loading={deleteLoading}
         onCancel={() => setDeleteProductTarget(null)}
         onConfirm={() => void handleDeleteProduct()}

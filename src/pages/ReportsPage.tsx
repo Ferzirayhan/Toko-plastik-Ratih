@@ -1,6 +1,6 @@
 import { format, subDays } from 'date-fns'
 import { id as localeId } from 'date-fns/locale'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import {
   getReportSummary,
@@ -8,12 +8,16 @@ import {
   getSalesByDateRange,
   getTransactionHistoryPage,
 } from '../api/reports'
+import { getTransactionById } from '../api/transactions'
+import { ReceiptPrint } from '../components/pos/ReceiptPrint'
 import { CurrencyDisplay } from '../components/ui/CurrencyDisplay'
 import { Modal } from '../components/ui/Modal'
 import { Skeleton } from '../components/ui/Skeleton'
+import { usePrint } from '../hooks/usePrint'
+import { useAuthStore } from '../stores/authStore'
 import { useToastStore } from '../stores/toastStore'
 import { useUIStore } from '../stores/uiStore'
-import type { TransactionWithKasir } from '../types/database'
+import type { Transaction, TransactionItem, TransactionWithKasir } from '../types/database'
 import { cn } from '../utils/cn'
 import { formatRupiah } from '../utils/currency'
 
@@ -28,26 +32,65 @@ function formatDateInput(date: Date) {
 
 export function ReportsPage() {
   const sidebarCollapsed = useUIStore((state) => state.sidebarCollapsed)
+  const user = useAuthStore((state) => state.user)
   const pushToast = useToastStore((state) => state.pushToast)
+  const printRef = useRef<HTMLDivElement>(null)
   const [quickRange, setQuickRange] = useState<QuickRange>('7days')
   const [dateFrom, setDateFrom] = useState(formatDateInput(subDays(new Date(), 6)))
   const [dateTo, setDateTo] = useState(formatDateInput(new Date()))
-  const [metodeBayar, setMetodeBayar] = useState<'all' | 'tunai' | 'transfer' | 'qris' | 'debit'>('all')
+  const [metodeBayar, setMetodeBayar] = useState<'all' | 'tunai' | 'transfer' | 'qris'>('all')
+  const [paymentStatus, setPaymentStatus] = useState<'all' | 'dibayar' | 'menunggu_konfirmasi' | 'gagal'>('all')
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
+  const [detailLoading, setDetailLoading] = useState(false)
   const [summary, setSummary] = useState({
     totalPenjualan: 0,
     jumlahTransaksi: 0,
     rataRataTransaksi: 0,
     produkTerlaris: null as null | { nama: string; totalQty: number },
+    jumlahPending: 0,
   })
   const [salesChart, setSalesChart] = useState<Array<{ tanggal: string; totalPenjualan: number; jumlahTransaksi: number }>>([])
   const [categoryChart, setCategoryChart] = useState<Array<{ category: string; total: number }>>([])
   const [transactions, setTransactions] = useState<TransactionWithKasir[]>([])
   const [totalCount, setTotalCount] = useState(0)
   const [selectedTransaction, setSelectedTransaction] = useState<TransactionWithKasir | null>(null)
+  const [selectedItems, setSelectedItems] = useState<TransactionItem[]>([])
+
+  const handlePrint = usePrint({
+    contentRef: printRef,
+    documentTitle: selectedTransaction?.nomor_nota ?? 'struk-transaksi',
+  })
+
+  const printableTransaction = useMemo<Transaction | null>(() => {
+    if (!selectedTransaction?.id || !selectedTransaction.nomor_nota) {
+      return null
+    }
+
+    return {
+      id: selectedTransaction.id,
+      nomor_nota: selectedTransaction.nomor_nota,
+      kasir_id: selectedTransaction.kasir_id ?? null,
+      subtotal: Number(selectedTransaction.subtotal ?? 0),
+      diskon_persen: Number(selectedTransaction.diskon_persen ?? 0),
+      diskon_amount: Number(selectedTransaction.diskon_amount ?? 0),
+      ppn_persen: Number(selectedTransaction.ppn_persen ?? 0),
+      ppn_amount: Number(selectedTransaction.ppn_amount ?? 0),
+      total: Number(selectedTransaction.total ?? 0),
+      metode_bayar: selectedTransaction.metode_bayar ?? 'tunai',
+      uang_diterima: selectedTransaction.uang_diterima ?? null,
+      kembalian: selectedTransaction.kembalian ?? null,
+      catatan: selectedTransaction.catatan ?? null,
+      status: selectedTransaction.status ?? 'selesai',
+      payment_status: selectedTransaction.payment_status ?? 'dibayar',
+      paid_at: selectedTransaction.paid_at ?? null,
+      confirmed_by: selectedTransaction.confirmed_by ?? null,
+      payment_reference: selectedTransaction.payment_reference ?? null,
+      created_at: selectedTransaction.created_at ?? null,
+    }
+  }, [selectedTransaction])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -76,6 +119,7 @@ export function ReportsPage() {
           dateFrom,
           dateTo,
           metodeBayar,
+          paymentStatus,
           search: debouncedSearch || undefined,
         }),
       ])
@@ -90,6 +134,7 @@ export function ReportsPage() {
               totalQty: summaryResult.produkTerlaris.totalQty,
             }
           : null,
+        jumlahPending: summaryResult.jumlahPending,
       })
       setSalesChart(salesResult)
       setCategoryChart(categoryResult)
@@ -104,7 +149,7 @@ export function ReportsPage() {
     } finally {
       setLoading(false)
     }
-  }, [dateFrom, dateTo, debouncedSearch, metodeBayar, page, pushToast])
+  }, [dateFrom, dateTo, debouncedSearch, metodeBayar, page, paymentStatus, pushToast])
 
   useEffect(() => {
     void loadReports()
@@ -149,6 +194,7 @@ export function ReportsPage() {
         dateFrom,
         dateTo,
         metodeBayar,
+        paymentStatus,
         search: debouncedSearch || undefined,
       })
 
@@ -159,6 +205,7 @@ export function ReportsPage() {
         Total: Number(item.total ?? 0),
         Metode: item.metode_bayar ?? '-',
         Status: item.status ?? '-',
+        'Status Pembayaran': item.payment_status ?? '-',
         Waktu: item.created_at ?? '-',
         'Jumlah Item': item.jumlah_item ?? 0,
       }))
@@ -181,15 +228,40 @@ export function ReportsPage() {
     }
   }
 
+  const openTransactionDetail = async (transaction: TransactionWithKasir) => {
+    setSelectedTransaction(transaction)
+    setDetailLoading(true)
+
+    try {
+      if (!transaction.id) {
+        setSelectedItems([])
+        return
+      }
+
+      const detail = await getTransactionById(transaction.id)
+      setSelectedItems(detail?.items ?? [])
+    } catch (error) {
+      pushToast({
+        title: 'Gagal memuat detail transaksi',
+        description:
+          error instanceof Error ? error.message : 'Detail transaksi belum berhasil dimuat.',
+        variant: 'error',
+      })
+      setSelectedItems([])
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
   return (
     <main
       className={cn(
-        'min-h-screen bg-[#f7f9f9] transition-[margin] duration-200',
-        sidebarCollapsed ? 'ml-16' : 'ml-[220px]',
+        'min-h-screen bg-[#f7f9f9] pt-16 transition-[margin] duration-200 md:pt-0',
+        sidebarCollapsed ? 'md:ml-16' : 'md:ml-[220px]',
       )}
     >
-      <div className="min-h-screen rounded-l-[24px] bg-white">
-        <header className="flex items-center justify-between border-b border-[#eef1f1] px-6 py-4">
+      <div className="min-h-screen bg-white md:rounded-l-[24px]">
+        <header className="flex flex-col gap-3 border-b border-[#eef1f1] px-4 py-4 sm:px-6 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-[28px] font-extrabold tracking-[-0.03em] text-[#1b1e20]">
               Laporan Penjualan
@@ -207,10 +279,10 @@ export function ReportsPage() {
           </button>
         </header>
 
-        <div className="space-y-6 bg-[#f7f9f9] px-6 py-6">
+        <div className="space-y-6 bg-[#f7f9f9] px-4 py-4 sm:px-6 sm:py-6">
           <section className="rounded-[20px] bg-white p-5 shadow-[0_6px_24px_rgba(15,23,42,0.04)]">
-            <div className="flex flex-wrap items-end gap-4">
-              <div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,180px))_minmax(0,1fr)]">
+              <div className="min-w-0">
                 <label className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
                   Dari
                 </label>
@@ -222,10 +294,10 @@ export function ReportsPage() {
                     setDateFrom(event.target.value)
                     setPage(1)
                   }}
-                  className="mt-2 h-11 rounded-[12px] border-none bg-[#f1f3f5] px-4 text-sm outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+                  className="mt-2 h-12 w-full rounded-[16px] border border-transparent bg-[#f1f3f5] px-4 text-sm font-semibold text-[#1b1e20] outline-none focus:border-[#cde9e4] focus:ring-2 focus:ring-[#0a7c72]/10"
                 />
               </div>
-              <div>
+              <div className="min-w-0">
                 <label className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
                   Sampai
                 </label>
@@ -237,11 +309,11 @@ export function ReportsPage() {
                     setDateTo(event.target.value)
                     setPage(1)
                   }}
-                  className="mt-2 h-11 rounded-[12px] border-none bg-[#f1f3f5] px-4 text-sm outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+                  className="mt-2 h-12 w-full rounded-[16px] border border-transparent bg-[#f1f3f5] px-4 text-sm font-semibold text-[#1b1e20] outline-none focus:border-[#cde9e4] focus:ring-2 focus:ring-[#0a7c72]/10"
                 />
               </div>
 
-              <div>
+              <div className="min-w-0">
                 <label className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
                   Metode
                 </label>
@@ -251,17 +323,35 @@ export function ReportsPage() {
                     setMetodeBayar(event.target.value as typeof metodeBayar)
                     setPage(1)
                   }}
-                  className="mt-2 h-11 rounded-[12px] border-none bg-[#f1f3f5] px-4 text-sm outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+                  className="mt-2 h-12 w-full rounded-[16px] border border-transparent bg-[#f1f3f5] px-4 text-sm font-semibold text-[#1b1e20] outline-none focus:border-[#cde9e4] focus:ring-2 focus:ring-[#0a7c72]/10"
                 >
                   <option value="all">Semua Metode</option>
                   <option value="tunai">Tunai</option>
                   <option value="transfer">Transfer</option>
                   <option value="qris">QRIS</option>
-                  <option value="debit">Debit</option>
                 </select>
               </div>
 
-              <div className="flex-1 min-w-[220px]">
+              <div className="min-w-0">
+                <label className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
+                  Status Bayar
+                </label>
+                <select
+                  value={paymentStatus}
+                  onChange={(event) => {
+                    setPaymentStatus(event.target.value as typeof paymentStatus)
+                    setPage(1)
+                  }}
+                  className="mt-2 h-12 w-full rounded-[16px] border border-transparent bg-[#f1f3f5] px-4 text-sm font-semibold text-[#1b1e20] outline-none focus:border-[#cde9e4] focus:ring-2 focus:ring-[#0a7c72]/10"
+                >
+                  <option value="all">Semua Status</option>
+                  <option value="dibayar">Dibayar</option>
+                  <option value="menunggu_konfirmasi">Menunggu Konfirmasi</option>
+                  <option value="gagal">Gagal</option>
+                </select>
+              </div>
+
+              <div className="min-w-0 md:col-span-2 xl:col-span-1">
                 <label className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
                   Cari
                 </label>
@@ -270,12 +360,12 @@ export function ReportsPage() {
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="Cari nota atau nama kasir..."
-                  className="mt-2 h-11 w-full rounded-[12px] border-none bg-[#f1f3f5] px-4 text-sm outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+                  className="mt-2 h-12 w-full rounded-[16px] border border-transparent bg-[#f1f3f5] px-4 text-sm font-medium text-[#1b1e20] outline-none focus:border-[#cde9e4] focus:ring-2 focus:ring-[#0a7c72]/10"
                 />
               </div>
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-5 flex flex-wrap gap-2">
               {[
                 ['today', 'Hari Ini'],
                 ['7days', '7 Hari'],
@@ -287,8 +377,8 @@ export function ReportsPage() {
                   type="button"
                   onClick={() => applyQuickRange(value as QuickRange)}
                   className={quickRange === value
-                    ? 'rounded-full bg-[#0a7c72] px-4 py-2 text-sm font-bold text-white'
-                    : 'rounded-full bg-[#eef3f3] px-4 py-2 text-sm font-bold text-[#52627d]'}
+                    ? 'rounded-[14px] bg-[#0a7c72] px-4 py-2.5 text-sm font-bold text-white shadow-[0_10px_22px_rgba(10,124,114,0.18)]'
+                    : 'rounded-[14px] bg-[#eef3f3] px-4 py-2.5 text-sm font-bold text-[#52627d]'}
                 >
                   {label}
                 </button>
@@ -296,12 +386,12 @@ export function ReportsPage() {
             </div>
           </section>
 
-          <section className="grid grid-cols-4 gap-4">
+          <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {[
               { label: 'Total Penjualan', value: <CurrencyDisplay value={summary.totalPenjualan} /> },
               { label: 'Jumlah Transaksi', value: summary.jumlahTransaksi },
               { label: 'Rata-rata Transaksi', value: <CurrencyDisplay value={summary.rataRataTransaksi} /> },
-              { label: 'Produk Terlaris', value: summary.produkTerlaris ? `${summary.produkTerlaris.nama} (${summary.produkTerlaris.totalQty})` : '-' },
+              { label: 'Pending Payment', value: summary.jumlahPending },
             ].map((card) => (
               <div key={card.label} className="rounded-[18px] bg-white p-5 shadow-[0_6px_24px_rgba(15,23,42,0.04)]">
                 <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
@@ -314,7 +404,7 @@ export function ReportsPage() {
             ))}
           </section>
 
-          <section className="grid grid-cols-[minmax(0,1fr)_320px] gap-4">
+          <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
             <div className="rounded-[20px] bg-white p-5 shadow-[0_6px_24px_rgba(15,23,42,0.04)]">
               <h2 className="text-[18px] font-extrabold text-[#1b1e20]">Grafik Penjualan Harian</h2>
               <div className="mt-5 h-[300px]">
@@ -392,7 +482,7 @@ export function ReportsPage() {
             <div className="border-b border-[#eef1f1] px-5 py-4">
               <h2 className="text-[18px] font-extrabold text-[#1b1e20]">Riwayat Transaksi</h2>
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto hidden md:block">
               <table className="min-w-full">
                 <thead className="bg-[#f7f9f9]">
                   <tr>
@@ -437,7 +527,7 @@ export function ReportsPage() {
                           <td className="px-5 py-4">
                             <button
                               type="button"
-                              onClick={() => setSelectedTransaction(transaction)}
+                              onClick={() => void openTransactionDetail(transaction)}
                               className="rounded-[12px] px-3 py-2 text-sm font-bold text-[#0a7c72] hover:bg-[#e7f8f6]"
                             >
                               Detail
@@ -449,7 +539,56 @@ export function ReportsPage() {
               </table>
             </div>
 
-            <div className="flex items-center justify-between border-t border-[#eef1f1] px-5 py-4">
+            {!loading ? (
+              <div className="space-y-4 p-4 md:hidden">
+                {transactions.map((transaction) => (
+                  <article key={transaction.id} className="rounded-[18px] border border-[#eef1f1] bg-[#fbfdfd] p-4 shadow-[0_6px_18px_rgba(15,23,42,0.04)]">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-extrabold text-[#0a7c72]">{transaction.nomor_nota ?? '-'}</p>
+                        <p className="mt-1 text-xs text-[#8b9895]">{transaction.kasir_nama ?? '-'}</p>
+                      </div>
+                      <span className={transaction.payment_status === 'dibayar'
+                        ? 'rounded-full bg-[#ccfaf1] px-3 py-1 text-[10px] font-extrabold uppercase text-[#0a7c72]'
+                        : transaction.payment_status === 'menunggu_konfirmasi'
+                          ? 'rounded-full bg-[#fff5e8] px-3 py-1 text-[10px] font-extrabold uppercase text-[#855300]'
+                          : 'rounded-full bg-[#ffdad6] px-3 py-1 text-[10px] font-extrabold uppercase text-[#ba1a1a]'}>
+                        {transaction.payment_status?.replaceAll('_', ' ') ?? '-'}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <p className="text-[#8b9895]">Total</p>
+                        <p className="font-bold text-[#1b1e20]">{formatRupiah(Number(transaction.total ?? 0))}</p>
+                      </div>
+                      <div>
+                        <p className="text-[#8b9895]">Metode</p>
+                        <p className="font-bold capitalize text-[#1b1e20]">{transaction.metode_bayar ?? '-'}</p>
+                      </div>
+                      <div className="col-span-2">
+                        <p className="text-[#8b9895]">Waktu</p>
+                        <p className="font-medium text-[#52627d]">
+                          {transaction.created_at
+                            ? format(new Date(transaction.created_at), 'dd MMM yyyy, HH:mm', { locale: localeId })
+                            : '-'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => void openTransactionDetail(transaction)}
+                      className="mt-4 w-full rounded-[12px] bg-[#e7f8f6] px-3 py-2 text-sm font-bold text-[#0a7c72]"
+                    >
+                      Lihat Detail
+                    </button>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="flex flex-col gap-3 border-t border-[#eef1f1] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-[#8b9895]">
                 Menampilkan {transactions.length === 0 ? 0 : (page - 1) * 10 + 1}-{Math.min(page * 10, totalCount)} dari {totalCount} transaksi
               </p>
@@ -493,6 +632,16 @@ export function ReportsPage() {
             <span className="font-bold capitalize text-[#1b1e20]">{selectedTransaction?.metode_bayar ?? '-'}</span>
           </div>
           <div className="flex justify-between">
+            <span className="text-[#8b9895]">Status Pembayaran</span>
+            <span className={selectedTransaction?.payment_status === 'dibayar'
+              ? 'rounded-full bg-[#ccfaf1] px-3 py-1 text-[10px] font-extrabold uppercase text-[#0a7c72]'
+              : selectedTransaction?.payment_status === 'menunggu_konfirmasi'
+                ? 'rounded-full bg-[#fff5e8] px-3 py-1 text-[10px] font-extrabold uppercase text-[#855300]'
+                : 'rounded-full bg-[#ffdad6] px-3 py-1 text-[10px] font-extrabold uppercase text-[#ba1a1a]'}>
+              {selectedTransaction?.payment_status?.replaceAll('_', ' ') ?? '-'}
+            </span>
+          </div>
+          <div className="flex justify-between">
             <span className="text-[#8b9895]">Jumlah Item</span>
             <span className="font-bold text-[#1b1e20]">{selectedTransaction?.jumlah_item ?? 0}</span>
           </div>
@@ -500,8 +649,55 @@ export function ReportsPage() {
             <span className="text-[#8b9895]">Total</span>
             <span className="font-bold text-[#0a7c72]">{formatRupiah(Number(selectedTransaction?.total ?? 0))}</span>
           </div>
+          <div className="rounded-[16px] bg-[#f8fbfb] p-4">
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
+              Item Transaksi
+            </p>
+            <div className="mt-3 space-y-2">
+              {detailLoading ? (
+                <Skeleton className="h-24 rounded-[14px]" />
+              ) : selectedItems.length > 0 ? (
+                selectedItems.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between text-sm">
+                    <span className="text-[#1b1e20]">
+                      {item.nama_produk} ({item.qty}x)
+                    </span>
+                    <span className="font-bold text-[#1b1e20]">
+                      {formatRupiah(Number(item.subtotal))}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-[#8b9895]">Detail item belum tersedia.</p>
+              )}
+            </div>
+          </div>
+          {selectedTransaction?.payment_status === 'dibayar' ? (
+            <button
+              type="button"
+              onClick={() => void handlePrint()}
+              className="w-full rounded-[14px] bg-[#0a7c72] px-4 py-3 font-bold text-white"
+            >
+              Cetak Ulang Struk
+            </button>
+          ) : null}
         </div>
       </Modal>
+
+      <div className="hidden">
+        {printableTransaction ? (
+          <ReceiptPrint
+            ref={printRef}
+            cashier={user}
+            items={selectedItems}
+            settings={{
+              header_struk: 'Toko Plastik Ratih',
+              footer_struk: 'Terima kasih telah berbelanja',
+            }}
+            transaction={printableTransaction}
+          />
+        ) : null}
+      </div>
     </main>
   )
 }

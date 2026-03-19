@@ -23,11 +23,23 @@ const taxSchema = z.object({
   ppn_persen: z.coerce.number().min(0, 'PPN tidak boleh negatif').max(100, 'PPN maksimal 100%'),
 })
 
+const paymentSchema = z.object({
+  payment_qris_label: z.string().trim().min(2, 'Label QRIS wajib diisi'),
+  payment_transfer_label: z.string().trim().min(2, 'Label transfer wajib diisi'),
+  payment_transfer_account_name: z.string().trim().min(2, 'Nama rekening wajib diisi'),
+  payment_transfer_account_number: z.string().trim().min(3, 'Nomor rekening wajib diisi'),
+  payment_transfer_bank: z.string().trim().min(2, 'Nama bank wajib diisi'),
+  payment_whatsapp_number: z.string().trim().optional(),
+  payment_confirmation_note: z.string().trim().min(5, 'Catatan konfirmasi wajib diisi'),
+})
+
 type StoreProfileValues = z.infer<typeof storeProfileSchema>
 type TaxValues = z.infer<typeof taxSchema>
 type TaxInputValues = z.input<typeof taxSchema>
+type PaymentValues = z.infer<typeof paymentSchema>
+type PaymentInputValues = z.input<typeof paymentSchema>
 
-type SettingsTab = 'toko' | 'pengguna' | 'printer' | 'pajak'
+type SettingsTab = 'toko' | 'pengguna' | 'printer' | 'pajak' | 'pembayaran'
 
 export function SettingsPage() {
   const sidebarCollapsed = useUIStore((state) => state.sidebarCollapsed)
@@ -39,6 +51,7 @@ export function SettingsPage() {
   const [profilesLoading, setProfilesLoading] = useState(true)
   const [savingStore, setSavingStore] = useState(false)
   const [savingTax, setSavingTax] = useState(false)
+  const [savingPayment, setSavingPayment] = useState(false)
   const [updatingProfileId, setUpdatingProfileId] = useState<string | null>(null)
 
   const {
@@ -71,6 +84,24 @@ export function SettingsPage() {
     },
   })
 
+  const {
+    register: registerPayment,
+    handleSubmit: handleSubmitPayment,
+    reset: resetPaymentForm,
+    formState: { errors: paymentErrors },
+  } = useForm<PaymentInputValues, unknown, PaymentValues>({
+    resolver: zodResolver(paymentSchema),
+    defaultValues: {
+      payment_qris_label: '',
+      payment_transfer_label: '',
+      payment_transfer_account_name: '',
+      payment_transfer_account_number: '',
+      payment_transfer_bank: '',
+      payment_whatsapp_number: '',
+      payment_confirmation_note: '',
+    },
+  })
+
   useEffect(() => {
     resetStoreForm({
       nama_toko: settings.nama_toko ?? '',
@@ -85,7 +116,18 @@ export function SettingsPage() {
       ppn_enabled: ppnPersen > 0,
       ppn_persen: ppnPersen,
     })
-  }, [resetStoreForm, resetTaxForm, settings])
+    resetPaymentForm({
+      payment_qris_label: settings.payment_qris_label ?? 'QRIS Toko Plastik Ratih',
+      payment_transfer_label: settings.payment_transfer_label ?? 'Transfer Bank',
+      payment_transfer_account_name: settings.payment_transfer_account_name ?? 'Toko Plastik Ratih',
+      payment_transfer_account_number: settings.payment_transfer_account_number ?? '',
+      payment_transfer_bank: settings.payment_transfer_bank ?? '',
+      payment_whatsapp_number: settings.payment_whatsapp_number ?? '',
+      payment_confirmation_note:
+        settings.payment_confirmation_note ??
+        'Pastikan dana sudah masuk sebelum struk dicetak.',
+    })
+  }, [resetPaymentForm, resetStoreForm, resetTaxForm, settings])
 
   const loadProfiles = useCallback(async () => {
     setProfilesLoading(true)
@@ -165,6 +207,30 @@ export function SettingsPage() {
     }
   }
 
+  const onSubmitPayment = async (values: PaymentValues) => {
+    setSavingPayment(true)
+
+    try {
+      await saveSettings(values)
+      pushToast({
+        title: 'Pengaturan pembayaran diperbarui',
+        description: 'Instruksi QRIS, transfer, dan WhatsApp berhasil disimpan.',
+        variant: 'success',
+      })
+    } catch (saveError) {
+      pushToast({
+        title: 'Gagal menyimpan pembayaran',
+        description:
+          saveError instanceof Error
+            ? saveError.message
+            : 'Pengaturan pembayaran belum berhasil disimpan.',
+        variant: 'error',
+      })
+    } finally {
+      setSavingPayment(false)
+    }
+  }
+
   const toggleProfileActive = async (profile: Profile) => {
     setUpdatingProfileId(profile.id)
 
@@ -212,12 +278,12 @@ export function SettingsPage() {
   return (
     <main
       className={cn(
-        'min-h-screen bg-[#f7f9f9] transition-[margin] duration-200',
-        sidebarCollapsed ? 'ml-16' : 'ml-[220px]',
+        'min-h-screen bg-[#f7f9f9] pt-16 transition-[margin] duration-200 md:pt-0',
+        sidebarCollapsed ? 'md:ml-16' : 'md:ml-[220px]',
       )}
     >
-      <div className="min-h-screen rounded-l-[24px] bg-white">
-        <header className="flex items-center justify-between border-b border-[#eef1f1] px-6 py-4">
+      <div className="min-h-screen bg-white md:rounded-l-[24px]">
+        <header className="border-b border-[#eef1f1] px-4 py-4 sm:px-6">
           <div>
             <h1 className="text-[28px] font-extrabold tracking-[-0.03em] text-[#1b1e20]">
               Pengaturan
@@ -228,13 +294,14 @@ export function SettingsPage() {
           </div>
         </header>
 
-        <div className="space-y-6 bg-[#f7f9f9] px-6 py-6">
-          <section className="flex w-fit gap-1 rounded-[16px] bg-white p-1 shadow-[0_6px_24px_rgba(15,23,42,0.04)]">
+        <div className="space-y-6 bg-[#f7f9f9] px-4 py-4 sm:px-6 sm:py-6">
+          <section className="flex max-w-full gap-1 overflow-x-auto rounded-[16px] bg-white p-1 shadow-[0_6px_24px_rgba(15,23,42,0.04)]">
             {[
               ['toko', 'Toko'],
               ['pengguna', 'Pengguna'],
               ['printer', 'Printer'],
               ['pajak', 'Pajak & Diskon'],
+              ['pembayaran', 'Pembayaran'],
             ].map(([value, label]) => (
               <button
                 key={value}
@@ -252,7 +319,7 @@ export function SettingsPage() {
           </section>
 
           {activeTab === 'toko' ? (
-            <section className="grid grid-cols-[minmax(0,1fr)_320px] gap-6">
+            <section className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
               <form
                 className="rounded-[20px] bg-white p-6 shadow-[0_6px_24px_rgba(15,23,42,0.04)]"
                 onSubmit={handleSubmitStore(onSubmitStore)}
@@ -276,7 +343,7 @@ export function SettingsPage() {
                 </div>
 
                 <div className="mt-6 grid gap-5">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <label className="space-y-2">
                       <span className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
                         Nama Toko
@@ -397,6 +464,123 @@ export function SettingsPage() {
                   </div>
                 </div>
               </aside>
+            </section>
+          ) : null}
+
+          {activeTab === 'pembayaran' ? (
+            <section className="rounded-[20px] bg-white p-6 shadow-[0_6px_24px_rgba(15,23,42,0.04)]">
+              <form className="space-y-5" onSubmit={handleSubmitPayment(onSubmitPayment)}>
+                <div>
+                  <h2 className="text-[22px] font-extrabold text-[#1b1e20]">
+                    Pengaturan Pembayaran Non Tunai
+                  </h2>
+                  <p className="mt-1 text-sm font-medium text-[#8b9895]">
+                    Informasi ini akan dipakai di halaman POS saat kasir memproses QRIS dan transfer.
+                  </p>
+                </div>
+
+                <div className="grid gap-5 md:grid-cols-2">
+                  <div>
+                    <label className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
+                      Label QRIS
+                    </label>
+                    <input
+                      {...registerPayment('payment_qris_label')}
+                      className="mt-2 h-12 w-full rounded-[14px] border-none bg-[#f1f3f5] px-4 text-sm outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+                    />
+                    {paymentErrors.payment_qris_label ? (
+                      <p className="mt-2 text-xs font-medium text-[#ba1a1a]">{paymentErrors.payment_qris_label.message}</p>
+                    ) : null}
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
+                      Nomor WhatsApp Toko
+                    </label>
+                    <input
+                      {...registerPayment('payment_whatsapp_number')}
+                      placeholder="62812xxxx"
+                      className="mt-2 h-12 w-full rounded-[14px] border-none bg-[#f1f3f5] px-4 text-sm outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
+                      Label Transfer
+                    </label>
+                    <input
+                      {...registerPayment('payment_transfer_label')}
+                      className="mt-2 h-12 w-full rounded-[14px] border-none bg-[#f1f3f5] px-4 text-sm outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+                    />
+                    {paymentErrors.payment_transfer_label ? (
+                      <p className="mt-2 text-xs font-medium text-[#ba1a1a]">{paymentErrors.payment_transfer_label.message}</p>
+                    ) : null}
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
+                      Nama Bank
+                    </label>
+                    <input
+                      {...registerPayment('payment_transfer_bank')}
+                      className="mt-2 h-12 w-full rounded-[14px] border-none bg-[#f1f3f5] px-4 text-sm outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+                    />
+                    {paymentErrors.payment_transfer_bank ? (
+                      <p className="mt-2 text-xs font-medium text-[#ba1a1a]">{paymentErrors.payment_transfer_bank.message}</p>
+                    ) : null}
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
+                      Nama Rekening
+                    </label>
+                    <input
+                      {...registerPayment('payment_transfer_account_name')}
+                      className="mt-2 h-12 w-full rounded-[14px] border-none bg-[#f1f3f5] px-4 text-sm outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+                    />
+                    {paymentErrors.payment_transfer_account_name ? (
+                      <p className="mt-2 text-xs font-medium text-[#ba1a1a]">{paymentErrors.payment_transfer_account_name.message}</p>
+                    ) : null}
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
+                      Nomor Rekening
+                    </label>
+                    <input
+                      {...registerPayment('payment_transfer_account_number')}
+                      className="mt-2 h-12 w-full rounded-[14px] border-none bg-[#f1f3f5] px-4 text-sm outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+                    />
+                    {paymentErrors.payment_transfer_account_number ? (
+                      <p className="mt-2 text-xs font-medium text-[#ba1a1a]">{paymentErrors.payment_transfer_account_number.message}</p>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
+                    Catatan Konfirmasi
+                  </label>
+                  <textarea
+                    {...registerPayment('payment_confirmation_note')}
+                    rows={4}
+                    className="mt-2 w-full rounded-[14px] border-none bg-[#f1f3f5] px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+                  />
+                  {paymentErrors.payment_confirmation_note ? (
+                    <p className="mt-2 text-xs font-medium text-[#ba1a1a]">{paymentErrors.payment_confirmation_note.message}</p>
+                  ) : null}
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={savingPayment}
+                    className="rounded-[14px] bg-[#0a7c72] px-5 py-3 font-bold text-white disabled:opacity-60"
+                  >
+                    {savingPayment ? 'Menyimpan...' : 'Simpan Pengaturan Pembayaran'}
+                  </button>
+                </div>
+              </form>
             </section>
           ) : null}
 
@@ -529,7 +713,7 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === 'printer' ? (
-            <section className="grid grid-cols-2 gap-6">
+            <section className="grid grid-cols-1 gap-6 xl:grid-cols-2">
               <div className="rounded-[20px] bg-white p-6 shadow-[0_6px_24px_rgba(15,23,42,0.04)]">
                 <h2 className="text-[22px] font-extrabold text-[#1b1e20]">
                   Printer Struk
@@ -559,7 +743,7 @@ export function SettingsPage() {
           ) : null}
 
           {activeTab === 'pajak' ? (
-            <section className="grid grid-cols-[minmax(0,1fr)_320px] gap-6">
+            <section className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
               <form
                 className="rounded-[20px] bg-white p-6 shadow-[0_6px_24px_rgba(15,23,42,0.04)]"
                 onSubmit={handleSubmitTax(onSubmitTax)}

@@ -293,13 +293,13 @@ export function DashboardPage() {
   return (
     <main
       className={cn(
-        'min-h-screen bg-[#f7f9f9] transition-[margin] duration-200',
-        sidebarCollapsed ? 'ml-16' : 'ml-[220px]',
+        'min-h-screen bg-[#f7f9f9] pt-[4.6rem] transition-[margin] duration-200 md:pt-0',
+        sidebarCollapsed ? 'md:ml-16' : 'md:ml-[220px]',
       )}
     >
-      <div className="min-h-screen rounded-l-[24px] bg-white">
-        <header className="flex items-center justify-between border-b border-[#eef1f1] px-6 py-4">
-          <div className="relative w-full max-w-[330px]">
+      <div className="min-h-screen bg-white md:rounded-l-[24px]">
+        <header className="hidden border-b border-[#eef1f1] px-4 py-4 sm:px-6 md:flex md:items-center md:justify-between">
+          <div className="relative w-full lg:max-w-[330px]">
             <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a19f]">
               search
             </span>
@@ -310,7 +310,7 @@ export function DashboardPage() {
             />
           </div>
 
-          <div className="ml-6 flex items-center gap-4">
+          <div className="flex items-center justify-end gap-3 md:ml-6 md:gap-4">
             <div className="relative" ref={notificationRef}>
               <button
                 type="button"
@@ -325,7 +325,7 @@ export function DashboardPage() {
               </button>
 
               {showNotifications ? (
-                <div className="absolute right-0 top-[calc(100%+12px)] z-30 w-[360px] rounded-[20px] border border-[#eef1f1] bg-white p-4 shadow-[0_24px_60px_rgba(15,23,42,0.16)]">
+                <div className="absolute right-0 top-[calc(100%+12px)] z-30 w-[min(360px,calc(100vw-2rem))] rounded-[20px] border border-[#eef1f1] bg-white p-4 shadow-[0_24px_60px_rgba(15,23,42,0.16)]">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-extrabold uppercase tracking-[0.12em] text-[#0a7c72]">
@@ -372,7 +372,7 @@ export function DashboardPage() {
                 </div>
               ) : null}
             </div>
-            <div className="h-8 w-px bg-[#eef1f1]" />
+            <div className="hidden h-8 w-px bg-[#eef1f1] sm:block" />
             <div className="text-right">
               <p className="text-sm font-bold text-[#191c1e]">{user?.nama ?? 'Admin Toko'}</p>
               <p className="text-[11px] font-medium text-[#8b9895]">Shift Pagi</p>
@@ -383,18 +383,75 @@ export function DashboardPage() {
           </div>
         </header>
 
-        <div className="space-y-6 bg-[#f7f9f9] px-6 py-6">
-          <section className="flex items-end justify-between">
+        <div className="space-y-6 bg-[#f7f9f9] px-4 py-4 sm:px-6 sm:py-6">
+          <section className="md:hidden">
+            <div className="rounded-[22px] bg-[linear-gradient(135deg,#0a7c72_0%,#0c5f58_100%)] p-4 text-white shadow-[0_16px_32px_rgba(10,124,114,0.18)]">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-white/70">
+                    Dashboard Hari Ini
+                  </p>
+                  <h1 className="mt-2 text-[22px] font-extrabold leading-tight tracking-[-0.04em]">
+                    Pantau penjualan toko dengan cepat
+                  </h1>
+                  <p className="mt-2 text-[13px] font-medium leading-5 text-white/80">
+                    Ringkasan omzet, transaksi, dan notifikasi stok dalam satu layar mobile.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowNotifications((current) => !current)}
+                  className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] bg-white/14 text-white"
+                  aria-label="Buka notifikasi dashboard"
+                >
+                  <span className="material-symbols-outlined">notifications</span>
+                  {notifications.length > 0 ? (
+                    <span className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-[#ffb95f]" />
+                  ) : null}
+                </button>
+              </div>
+
+              {showNotifications ? (
+                <div
+                  className="relative mt-4 rounded-[20px] border border-white/12 bg-white/10 p-3 backdrop-blur"
+                  ref={notificationRef}
+                >
+                  <div className="space-y-2">
+                    {notifications.length > 0 ? (
+                      notifications.slice(0, 3).map((item) => (
+                        <Link
+                          key={item.id}
+                          to={item.href ?? '/dashboard'}
+                          onClick={() => setShowNotifications(false)}
+                          className="block rounded-[16px] bg-white/10 px-3 py-3 text-white transition hover:bg-white/14"
+                        >
+                          <p className="text-sm font-bold">{item.title}</p>
+                          <p className="mt-1 text-xs leading-5 text-white/80">{item.description}</p>
+                        </Link>
+                      ))
+                    ) : (
+                      <div className="rounded-[16px] bg-white/10 px-3 py-4 text-center text-sm font-medium text-white/80">
+                        Belum ada notifikasi baru.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <h1 className="text-[26px] font-extrabold tracking-[-0.03em] text-[#191c1e]">
+              <h1 className="text-[24px] font-extrabold tracking-[-0.04em] text-[#191c1e] lg:text-[26px]">
                 Laporan Dashboard
               </h1>
-              <p className="mt-1 text-sm font-medium text-[#7d8987]">
+              <p className="mt-1 text-[13px] font-medium text-[#7d8987] lg:text-sm">
                 Analisis performa penjualan hari ini secara real-time.
               </p>
             </div>
 
-            <div className="flex items-center gap-1 rounded-[12px] bg-white p-1 shadow-[0_4px_14px_rgba(0,0,0,0.03)]">
+            <div className="flex flex-wrap items-center gap-1 rounded-[14px] bg-white p-1 shadow-[0_4px_14px_rgba(0,0,0,0.03)]">
               <button className="rounded-[10px] bg-[#f4fffc] px-4 py-2 text-sm font-bold text-[#0a7c72]">
                 Hari Ini
               </button>
@@ -417,7 +474,7 @@ export function DashboardPage() {
             </div>
           ) : null}
 
-          <section className="grid grid-cols-4 gap-4">
+          <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {summaryCards.map((card) => (
               <article
                 key={card.title}
@@ -453,7 +510,7 @@ export function DashboardPage() {
             ))}
           </section>
 
-          <section className="grid grid-cols-[minmax(0,1fr)_320px] gap-4">
+          <section className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
             <article className="rounded-[18px] bg-white p-5 shadow-[0_6px_24px_rgba(15,23,42,0.04)]">
               <div className="flex items-center justify-between">
                 <h2 className="flex items-center gap-2 text-[15px] font-extrabold text-[#2e3132]">
@@ -602,7 +659,7 @@ export function DashboardPage() {
               </Link>
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="hidden overflow-x-auto md:block">
               <table className="min-w-full">
                 <thead className="bg-[#f7f9f9]">
                   <tr>
@@ -666,6 +723,54 @@ export function DashboardPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+
+            <div className="space-y-3 p-4 md:hidden">
+              {loading ? (
+                Array.from({ length: 4 }).map((_, index) => (
+                  <Skeleton key={index} className="h-24 rounded-[18px]" />
+                ))
+              ) : latestTransactions.length > 0 ? (
+                latestTransactions.map((item) => (
+                  <article
+                    key={item.id}
+                    className="rounded-[20px] border border-[#edf2f1] bg-[#fbfcfc] p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-[15px] font-extrabold text-[#0a7c72]">
+                          #{item.nomor_nota ?? '-'}
+                        </p>
+                        <p className="mt-1 text-xs font-medium text-[#8b9895]">
+                          {item.kasir_nama ?? '-'} • {formatTransactionTime(item.created_at)}
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-[#ccfaf1] px-3 py-1 text-[10px] font-extrabold uppercase text-[#0a7c72]">
+                        Lunas
+                      </span>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between">
+                      <div>
+                        <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
+                          Metode
+                        </p>
+                        <p className="mt-1 text-sm font-bold text-[#2e3132]">
+                          {item.metode_bayar?.toUpperCase() ?? '-'}
+                        </p>
+                      </div>
+                      <CurrencyDisplay
+                        className="text-lg font-extrabold text-[#1b1e20]"
+                        value={Number(item.total ?? 0)}
+                      />
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <div className="rounded-[18px] bg-[#f8f9fb] px-4 py-8 text-center text-sm font-medium text-[#8b9895]">
+                  Belum ada transaksi terbaru.
+                </div>
+              )}
             </div>
           </section>
         </div>

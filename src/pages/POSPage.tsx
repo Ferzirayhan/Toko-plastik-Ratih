@@ -1,6 +1,11 @@
 import { format } from 'date-fns'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { createTransaction } from '../api/transactions'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  cancelPendingTransaction,
+  confirmTransactionPayment,
+  createTransaction,
+  getPendingTransactions,
+} from '../api/transactions'
 import {
   getActiveCategories,
   getProductByBarcode,
@@ -12,19 +17,25 @@ import { ProductCard } from '../components/pos/ProductCard'
 import { ReceiptModal } from '../components/pos/ReceiptModal'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { CurrencyDisplay } from '../components/ui/CurrencyDisplay'
+import { Modal } from '../components/ui/Modal'
 import { Skeleton } from '../components/ui/Skeleton'
 import { useCartStore } from '../stores/cartStore'
 import { useAuthStore } from '../stores/authStore'
 import { useToastStore } from '../stores/toastStore'
 import { useUIStore } from '../stores/uiStore'
-import type { Category, ProductWithCategory, Transaction, TransactionItem } from '../types/database'
+import type {
+  Category,
+  ProductWithCategory,
+  Transaction,
+  TransactionItem,
+  TransactionWithKasir,
+} from '../types/database'
 import { cn } from '../utils/cn'
 
 const paymentMethods = [
   { value: 'tunai', label: 'Tunai', icon: 'payments' },
   { value: 'transfer', label: 'Transfer', icon: 'account_balance' },
   { value: 'qris', label: 'QRIS', icon: 'qr_code_2' },
-  { value: 'debit', label: 'Debit', icon: 'credit_card' },
 ] as const
 
 function getPreviewNomorNota() {
@@ -34,6 +45,14 @@ function getPreviewNomorNota() {
 function isBarcodeQuery(value: string) {
   const normalizedValue = value.trim()
   return normalizedValue.length >= 8 && /^[a-zA-Z0-9-]+$/.test(normalizedValue)
+}
+
+function formatPendingTime(value: string | null) {
+  if (!value) {
+    return '-'
+  }
+
+  return format(new Date(value), 'HH:mm')
 }
 
 export function POSPage() {
@@ -68,17 +87,26 @@ export function POSPage() {
   const [products, setProducts] = useState<ProductWithCategory[]>([])
   const [filteredProducts, setFilteredProducts] = useState<ProductWithCategory[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const [pendingTransactions, setPendingTransactions] = useState<TransactionWithKasir[]>([])
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | 'all'>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [uangInput, setUangInput] = useState('')
   const [loading, setLoading] = useState(true)
+  const [pendingLoading, setPendingLoading] = useState(true)
   const [processingPayment, setProcessingPayment] = useState(false)
+  const [confirmingPayment, setConfirmingPayment] = useState(false)
+  const [cancelingPayment, setCancelingPayment] = useState(false)
   const [settings, setSettings] = useState<Record<string, string>>({})
   const [receiptOpen, setReceiptOpen] = useState(false)
   const [receiptTransaction, setReceiptTransaction] = useState<Transaction | null>(null)
   const [receiptItems, setReceiptItems] = useState<TransactionItem[]>([])
   const [showClearConfirm, setShowClearConfirm] = useState(false)
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false)
+  const [confirmTarget, setConfirmTarget] = useState<TransactionWithKasir | null>(null)
+  const [cancelTarget, setCancelTarget] = useState<TransactionWithKasir | null>(null)
+  const [paymentReference, setPaymentReference] = useState('')
+  const [mobileSection, setMobileSection] = useState<'produk' | 'keranjang' | 'pending'>('produk')
 
   useEffect(() => {
     searchInputRef.current?.focus()
@@ -94,53 +122,55 @@ export function POSPage() {
     }
   }, [searchQuery])
 
-  useEffect(() => {
-    let isMounted = true
+  const loadCatalogData = useCallback(async () => {
+    setLoading(true)
 
-    async function loadPOSData() {
-      setLoading(true)
+    try {
+      const [productsResult, categoriesResult, settingsResult] = await Promise.all([
+        getProducts({ isActive: true }),
+        getActiveCategories(),
+        getSettings(),
+      ])
 
-      try {
-        const [productsResult, categoriesResult, settingsResult] = await Promise.all([
-          getProducts({ isActive: true }),
-          getActiveCategories(),
-          getSettings(),
-        ])
-
-        if (!isMounted) {
-          return
-        }
-
-        setProducts(productsResult)
-        setCategories(categoriesResult)
-        setSettings(settingsResult)
-
-        const defaultPPN = Number(settingsResult.ppn_persen ?? 0)
-        setPpnPersen(defaultPPN)
-      } catch (error) {
-        if (!isMounted) {
-          return
-        }
-
-        pushToast({
-          title: 'Gagal memuat POS',
-          description:
-            error instanceof Error ? error.message : 'Data POS belum berhasil dimuat.',
-          variant: 'error',
-        })
-      } finally {
-        if (isMounted) {
-          setLoading(false)
-        }
-      }
-    }
-
-    void loadPOSData()
-
-    return () => {
-      isMounted = false
+      setProducts(productsResult)
+      setCategories(categoriesResult)
+      setSettings(settingsResult)
+      setPpnPersen(Number(settingsResult.ppn_persen ?? 0))
+    } catch (error) {
+      pushToast({
+        title: 'Gagal memuat POS',
+        description:
+          error instanceof Error ? error.message : 'Data POS belum berhasil dimuat.',
+        variant: 'error',
+      })
+    } finally {
+      setLoading(false)
     }
   }, [pushToast, setPpnPersen])
+
+  const loadPendingData = useCallback(async () => {
+    setPendingLoading(true)
+
+    try {
+      const result = await getPendingTransactions()
+      setPendingTransactions(result)
+    } catch (error) {
+      pushToast({
+        title: 'Gagal memuat pembayaran pending',
+        description:
+          error instanceof Error
+            ? error.message
+            : 'Daftar transaksi pending belum berhasil dimuat.',
+        variant: 'error',
+      })
+    } finally {
+      setPendingLoading(false)
+    }
+  }, [pushToast])
+
+  useEffect(() => {
+    void Promise.all([loadCatalogData(), loadPendingData()])
+  }, [loadCatalogData, loadPendingData])
 
   useEffect(() => {
     let activeProducts = products
@@ -181,6 +211,7 @@ export function POSPage() {
   const handleAddProduct = (product: ProductWithCategory) => {
     try {
       addItem(product)
+      setMobileSection('keranjang')
     } catch (error) {
       pushToast({
         title: 'Tidak bisa menambah produk',
@@ -251,18 +282,35 @@ export function POSPage() {
         ppnAmount: ppn_amount,
         total,
         metodeBayar: metode_bayar,
-        uangDiterima: metode_bayar === 'tunai' ? uang_diterima : total,
+        uangDiterima: metode_bayar === 'tunai' ? uang_diterima : null,
         kembalian: metode_bayar === 'tunai' ? kembalian : 0,
       })
 
-      setReceiptTransaction(result.transaction)
-      setReceiptItems(result.items)
-      setReceiptOpen(true)
-      pushToast({
-        title: 'Pembayaran berhasil',
-        description: `Transaksi ${result.transaction.nomor_nota} tersimpan.`,
-        variant: 'success',
-      })
+      await Promise.all([loadCatalogData(), loadPendingData()])
+
+      if (result.transaction.payment_status === 'dibayar') {
+        setReceiptTransaction(result.transaction)
+        setReceiptItems(result.items)
+        setReceiptOpen(true)
+        pushToast({
+          title: 'Pembayaran berhasil',
+          description: `Transaksi ${result.transaction.nomor_nota} tersimpan.`,
+          variant: 'success',
+        })
+      } else {
+        setMobileSection('pending')
+        pushToast({
+          title: 'Transaksi disimpan',
+          description: `Transaksi ${result.transaction.nomor_nota} menunggu konfirmasi dana masuk.`,
+          variant: 'info',
+        })
+      }
+
+      clearCart()
+      setSearchQuery('')
+      setUangInput('')
+      setPpnPersen(Number(settings.ppn_persen ?? 0))
+      searchInputRef.current?.focus()
     } catch (error) {
       pushToast({
         title: 'Transaksi gagal',
@@ -272,6 +320,67 @@ export function POSPage() {
       })
     } finally {
       setProcessingPayment(false)
+    }
+  }
+
+  const handleConfirmPending = async () => {
+    if (!confirmTarget?.id) {
+      return
+    }
+
+    setConfirmingPayment(true)
+
+    try {
+      const detail = await confirmTransactionPayment(confirmTarget.id, paymentReference || null)
+      await Promise.all([loadPendingData(), loadCatalogData()])
+      setConfirmModalOpen(false)
+      setConfirmTarget(null)
+      setPaymentReference('')
+      setReceiptTransaction(detail.transaction)
+      setReceiptItems(detail.items)
+      setReceiptOpen(true)
+      pushToast({
+        title: 'Pembayaran dikonfirmasi',
+        description: `Dana untuk ${detail.transaction.nomor_nota} sudah ditandai masuk.`,
+        variant: 'success',
+      })
+    } catch (error) {
+      pushToast({
+        title: 'Konfirmasi gagal',
+        description:
+          error instanceof Error ? error.message : 'Pembayaran belum berhasil dikonfirmasi.',
+        variant: 'error',
+      })
+    } finally {
+      setConfirmingPayment(false)
+    }
+  }
+
+  const handleCancelPending = async () => {
+    if (!cancelTarget?.id) {
+      return
+    }
+
+    setCancelingPayment(true)
+
+    try {
+      await cancelPendingTransaction(cancelTarget.id, 'Dibatalkan dari kasir')
+      await Promise.all([loadPendingData(), loadCatalogData()])
+      pushToast({
+        title: 'Transaksi pending dibatalkan',
+        description: `${cancelTarget.nomor_nota ?? 'Transaksi'} berhasil dibatalkan.`,
+        variant: 'success',
+      })
+      setCancelTarget(null)
+    } catch (error) {
+      pushToast({
+        title: 'Gagal membatalkan transaksi',
+        description:
+          error instanceof Error ? error.message : 'Transaksi pending belum berhasil dibatalkan.',
+        variant: 'error',
+      })
+    } finally {
+      setCancelingPayment(false)
     }
   }
 
@@ -289,12 +398,59 @@ export function POSPage() {
   return (
     <main
       className={cn(
-        'min-h-screen bg-[#f7f9f9] transition-[margin] duration-200',
-        sidebarCollapsed ? 'ml-16' : 'ml-[220px]',
+        'min-h-screen bg-[#f7f9f9] pb-28 pt-16 transition-[margin] duration-200 md:pb-0 md:pt-0',
+        sidebarCollapsed ? 'md:ml-16' : 'md:ml-[220px]',
       )}
     >
-      <div className="grid min-h-screen grid-cols-[220px_minmax(0,1fr)_340px]">
-        <section className="border-r border-[#eef1f1] bg-white px-4 py-6">
+      <div className="grid min-h-screen grid-cols-1 md:grid-cols-[200px_minmax(0,1fr)] xl:grid-cols-[200px_minmax(0,1fr)_360px]">
+        <div className="border-b border-[#eef1f1] bg-white px-4 pb-3 pt-4 md:hidden">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-lg font-extrabold tracking-[-0.03em] text-[#1b1e20]">POS Kasir</p>
+              <p className="text-xs font-medium text-[#8b9895]">{user?.nama ?? 'Kasir aktif'}</p>
+            </div>
+            <div className="rounded-2xl bg-[#f4fffc] px-3 py-2 text-right">
+              <p className="text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">Total</p>
+              <CurrencyDisplay className="text-sm font-extrabold text-[#0a7c72]" value={total} />
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-3 gap-2 rounded-[18px] bg-[#f2f5f5] p-1">
+            {[
+              ['produk', `Produk`],
+              ['keranjang', `Keranjang`],
+              ['pending', `Pending`],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setMobileSection(value as typeof mobileSection)}
+                className={cn(
+                  'rounded-[14px] px-3 py-3 text-xs font-extrabold transition-colors',
+                  mobileSection === value
+                    ? 'bg-white text-[#0a7c72] shadow-[0_8px_18px_rgba(15,23,42,0.08)]'
+                    : 'text-[#6f7b79]',
+                )}
+              >
+                {label}
+                <span className="mt-1 block text-[10px] font-bold opacity-70">
+                  {value === 'produk'
+                    ? filteredProducts.length
+                    : value === 'keranjang'
+                      ? items.length
+                      : pendingTransactions.length}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <section
+          className={cn(
+            'border-b border-[#eef1f1] bg-white px-4 py-6 md:border-b-0 md:border-r',
+            mobileSection === 'produk' ? 'block' : 'hidden md:block',
+          )}
+        >
           <div>
             <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
               Cari Produk
@@ -311,7 +467,6 @@ export function POSPage() {
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') {
                     const trimmed = searchQuery.trim()
-
                     if (isBarcodeQuery(trimmed)) {
                       void handleBarcodeSearch(trimmed)
                     }
@@ -327,12 +482,12 @@ export function POSPage() {
             <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
               Kategori
             </p>
-            <div className="mt-3 space-y-2">
+            <div className="mt-3 flex gap-2 overflow-x-auto pb-2 md:block md:space-y-2 md:overflow-visible md:pb-0">
               <button
                 type="button"
                 onClick={() => setSelectedCategoryId('all')}
                 className={cn(
-                  'flex w-full items-center justify-between rounded-[14px] px-4 py-3 text-left text-sm font-bold transition-colors',
+                  'flex min-w-[140px] items-center justify-between rounded-[14px] px-4 py-3 text-left text-sm font-bold transition-colors md:w-full',
                   selectedCategoryId === 'all'
                     ? 'bg-[#0a7c72] text-white'
                     : 'bg-white text-[#2e3132] shadow-[0_4px_16px_rgba(15,23,42,0.04)]',
@@ -353,7 +508,7 @@ export function POSPage() {
                     type="button"
                     onClick={() => setSelectedCategoryId(category.id)}
                     className={cn(
-                      'flex w-full items-center justify-between rounded-[14px] px-4 py-3 text-left text-sm font-semibold transition-colors',
+                      'flex min-w-[160px] items-center justify-between rounded-[14px] px-4 py-3 text-left text-sm font-semibold transition-colors md:w-full',
                       selectedCategoryId === category.id
                         ? 'bg-[#e7f8f6] text-[#0a7c72]'
                         : 'bg-white text-[#52627d] shadow-[0_4px_16px_rgba(15,23,42,0.04)] hover:bg-[#f7f9f9]',
@@ -368,12 +523,17 @@ export function POSPage() {
           </div>
 
           <div className="mt-auto pt-8 text-xs font-medium text-[#98a19f]">
-            Scan barcode juga didukung. Fokus otomatis aktif saat halaman dibuka.
+            Scan barcode juga didukung. Barcode hanya diproses saat Enter ditekan.
           </div>
         </section>
 
-        <section className="px-6 py-6">
-          <div className="mb-5 flex items-start justify-between">
+        <section
+          className={cn(
+            'px-4 py-6 sm:px-6 md:px-5 xl:px-6',
+            mobileSection === 'produk' ? 'block' : 'hidden md:block',
+          )}
+        >
+          <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
               <h1 className="text-[20px] font-extrabold tracking-[-0.03em] text-[#1b1e20]">
                 Katalog Produk
@@ -382,7 +542,7 @@ export function POSPage() {
                 Pilih produk untuk menambahkannya ke nota penjualan.
               </p>
             </div>
-            <div className="flex items-center gap-3 rounded-full bg-white px-4 py-2 shadow-[0_4px_16px_rgba(15,23,42,0.04)]">
+            <div className="hidden items-center gap-3 self-start rounded-full bg-white px-4 py-2 shadow-[0_4px_16px_rgba(15,23,42,0.04)] md:flex">
               <span className="material-symbols-outlined text-[#8b9895]">account_circle</span>
               <div>
                 <p className="text-sm font-bold text-[#1b1e20]">{user?.nama ?? 'Kasir'}</p>
@@ -392,13 +552,13 @@ export function POSPage() {
           </div>
 
           {loading ? (
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
               {Array.from({ length: 12 }).map((_, index) => (
                 <Skeleton key={index} className="h-[220px] rounded-[18px]" />
               ))}
             </div>
           ) : filteredProducts.length > 0 ? (
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
               {filteredProducts.map((product) => (
                 <ProductCard key={product.id} product={product} onAdd={handleAddProduct} />
               ))}
@@ -414,8 +574,86 @@ export function POSPage() {
           )}
         </section>
 
-        <section className="border-l border-[#eef1f1] bg-white px-4 py-5 shadow-[-8px_0_24px_rgba(15,23,42,0.03)]">
-          <div className="flex items-center justify-between border-b border-[#eef1f1] pb-4">
+        <section
+          className={cn(
+            'border-t border-[#eef1f1] bg-white px-4 py-5 shadow-[0_-8px_24px_rgba(15,23,42,0.03)] md:col-span-2 xl:col-span-1 xl:border-l xl:border-t-0 xl:shadow-[-8px_0_24px_rgba(15,23,42,0.03)]',
+            mobileSection === 'produk' ? 'hidden md:block' : 'block',
+          )}
+        >
+          <div
+            className={cn(
+              'rounded-[18px] border border-[#eef1f1] bg-[#f8fbfb] p-4',
+              mobileSection === 'keranjang' ? 'hidden md:block' : 'block',
+            )}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
+                  Pending Hari Ini
+                </p>
+                <p className="mt-1 text-sm font-bold text-[#1b1e20]">
+                  {pendingTransactions.length} transaksi menunggu konfirmasi
+                </p>
+              </div>
+              <span className="rounded-full bg-[#fff5e8] px-3 py-1 text-[10px] font-extrabold uppercase text-[#855300]">
+                Non Tunai
+              </span>
+            </div>
+
+            <div className="custom-scrollbar mt-3 max-h-[180px] space-y-3 overflow-y-auto pr-1">
+              {pendingLoading ? (
+                Array.from({ length: 3 }).map((_, index) => (
+                  <Skeleton key={index} className="h-20 rounded-[14px]" />
+                ))
+              ) : pendingTransactions.length > 0 ? (
+                pendingTransactions.map((transaction) => (
+                  <div key={transaction.id} className="rounded-[16px] bg-white p-3 shadow-[0_4px_16px_rgba(15,23,42,0.04)]">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-extrabold text-[#1b1e20]">
+                          {transaction.nomor_nota ?? '-'}
+                        </p>
+                        <p className="mt-1 text-xs font-medium text-[#8b9895]">
+                          {transaction.metode_bayar?.toUpperCase()} • {formatPendingTime(transaction.created_at)}
+                        </p>
+                      </div>
+                      <CurrencyDisplay
+                        className="text-sm font-extrabold text-[#0a7c72]"
+                        value={Number(transaction.total ?? 0)}
+                      />
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConfirmTarget(transaction)
+                          setPaymentReference(transaction.payment_reference ?? '')
+                          setConfirmModalOpen(true)
+                        }}
+                        className="rounded-[12px] bg-[#0a7c72] px-3 py-2 text-xs font-bold text-white"
+                      >
+                        Dana Sudah Masuk
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCancelTarget(transaction)}
+                        className="rounded-[12px] bg-[#fff1eb] px-3 py-2 text-xs font-bold text-[#ba5a2b]"
+                      >
+                        Batalkan
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-[14px] bg-white px-4 py-5 text-center text-sm font-medium text-[#8b9895]">
+                  Belum ada transaksi QRIS atau transfer yang menunggu konfirmasi.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className={cn('mt-5 flex items-center justify-between border-b border-[#eef1f1] pb-4', mobileSection === 'pending' ? 'hidden md:flex' : 'flex')}>
             <div>
               <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
                 Nota Penjualan
@@ -432,7 +670,7 @@ export function POSPage() {
             </button>
           </div>
 
-          <div className="custom-scrollbar mt-4 max-h-[calc(100vh-420px)] space-y-3 overflow-y-auto pr-1">
+          <div className={cn('custom-scrollbar mt-4 max-h-[420px] space-y-3 overflow-y-auto pr-1 md:max-h-[calc(100vh-560px)]', mobileSection === 'pending' ? 'hidden md:block' : 'block')}>
             {items.length > 0 ? (
               items.map((item) => (
                 <CartItem
@@ -466,7 +704,7 @@ export function POSPage() {
                 />
               ))
             ) : (
-              <div className="flex h-56 flex-col items-center justify-center rounded-[18px] bg-[#f7f9f9] text-center">
+              <div className="flex h-48 flex-col items-center justify-center rounded-[18px] bg-[#f7f9f9] text-center">
                 <span className="material-symbols-outlined text-[40px] text-[#c3cbca]">shopping_cart</span>
                 <p className="mt-3 text-sm font-bold text-[#1b1e20]">Keranjang masih kosong</p>
                 <p className="mt-1 text-xs font-medium text-[#8b9895]">
@@ -476,7 +714,7 @@ export function POSPage() {
             )}
           </div>
 
-          <div className="mt-4 rounded-[20px] bg-[#f7f9f9] p-4">
+          <div className={cn('mt-4 rounded-[20px] bg-[#f7f9f9] p-4', mobileSection === 'pending' ? 'hidden md:block' : 'block')}>
             <div className="space-y-3 text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-[#6d7a77]">Subtotal</span>
@@ -523,7 +761,7 @@ export function POSPage() {
               <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
                 Metode Pembayaran
               </p>
-              <div className="mt-3 grid grid-cols-4 gap-2">
+              <div className="mt-3 grid grid-cols-3 gap-2">
                 {paymentMethods.map((method) => (
                   <button
                     key={method.value}
@@ -564,7 +802,7 @@ export function POSPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                   {quickCashButtons.map((amount, index) => (
                     <button
                       key={`${amount}-${index}`}
@@ -585,20 +823,113 @@ export function POSPage() {
                   <CurrencyDisplay className="text-xl font-extrabold text-[#855300]" value={kembalian} />
                 </div>
               </div>
-            ) : null}
+            ) : (
+              <div className="mt-5 rounded-[14px] bg-white px-4 py-3">
+                <p className="text-xs font-bold uppercase tracking-[0.1em] text-[#8b9895]">
+                  Instruksi Pembayaran
+                </p>
+                <p className="mt-2 text-sm font-medium text-[#52627d]">
+                  {settings.payment_confirmation_note ||
+                    'Pastikan dana sudah masuk sebelum struk dicetak.'}
+                </p>
+                <div className="mt-3 space-y-2 text-sm text-[#1b1e20]">
+                  {metode_bayar === 'transfer' ? (
+                    <>
+                      <p className="font-bold">
+                        {settings.payment_transfer_label || 'Transfer Bank'}
+                      </p>
+                      <p>
+                        {settings.payment_transfer_bank || 'Bank belum diatur'} •{' '}
+                        {settings.payment_transfer_account_number || 'No. rekening belum diatur'}
+                      </p>
+                      <p className="text-[#6d7a77]">
+                        A/N {settings.payment_transfer_account_name || 'Belum diatur'}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-bold">{settings.payment_qris_label || 'QRIS Toko'}</p>
+                      <p className="text-[#6d7a77]">
+                        Setelah customer bayar, kasir harus konfirmasi manual dana masuk.
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
 
             <button
               type="button"
               disabled={isPaymentDisabled || processingPayment}
               onClick={() => void handleProcessPayment()}
-              className="mt-5 flex h-14 w-full items-center justify-center gap-2 rounded-[16px] bg-[#0a7c72] text-base font-extrabold text-white shadow-[0_12px_24px_rgba(10,124,114,0.24)] transition hover:bg-[#086b62] disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-5 hidden h-14 w-full items-center justify-center gap-2 rounded-[16px] bg-[#0a7c72] text-base font-extrabold text-white shadow-[0_12px_24px_rgba(10,124,114,0.24)] transition hover:bg-[#086b62] disabled:cursor-not-allowed disabled:opacity-50 md:flex"
             >
-              <span>{processingPayment ? 'Memproses...' : 'PROSES PEMBAYARAN'}</span>
+              <span>
+                {processingPayment
+                  ? 'Memproses...'
+                  : metode_bayar === 'tunai'
+                    ? 'PROSES PEMBAYARAN'
+                    : 'SIMPAN MENUNGGU KONFIRMASI'}
+              </span>
               <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
             </button>
           </div>
         </section>
       </div>
+
+      {mobileSection !== 'pending' ? (
+        <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom,0px)+5.5rem)] z-40 px-3 md:hidden">
+          <div className="mx-auto max-w-[560px] rounded-[26px] border border-white/90 bg-white/96 p-3 shadow-[0_18px_40px_rgba(15,23,42,0.14)] backdrop-blur">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
+                  {items.length > 0 ? `${items.length} item di keranjang` : 'Belum ada item'}
+                </p>
+                <CurrencyDisplay
+                  className="mt-1 text-[22px] font-extrabold tracking-[-0.03em] text-[#0a7c72]"
+                  value={total}
+                />
+                <p className="mt-1 text-xs font-medium text-[#8b9895]">
+                  {metode_bayar === 'tunai'
+                    ? 'Siap diproses begitu pembayaran diterima.'
+                    : 'Simpan dulu, lalu konfirmasi dana masuk sebelum cetak struk.'}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                disabled={isPaymentDisabled || processingPayment || items.length === 0}
+                onClick={() => {
+                  if (mobileSection !== 'keranjang') {
+                    setMobileSection('keranjang')
+                    return
+                  }
+
+                  void handleProcessPayment()
+                }}
+                className="flex min-h-[62px] min-w-[140px] flex-col items-center justify-center rounded-[20px] bg-[#0a7c72] px-4 text-center text-white shadow-[0_12px_24px_rgba(10,124,114,0.22)] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <span className="text-[13px] font-extrabold uppercase tracking-[0.08em]">
+                  {mobileSection === 'keranjang'
+                    ? processingPayment
+                      ? 'Memproses'
+                      : metode_bayar === 'tunai'
+                        ? 'Bayar'
+                        : 'Simpan'
+                    : 'Lihat Keranjang'}
+                </span>
+                <span className="mt-1 text-[11px] font-medium text-white/80">
+                  {mobileSection === 'keranjang'
+                    ? metode_bayar === 'tunai'
+                      ? 'Proses pembayaran'
+                      : 'Menunggu konfirmasi'
+                    : 'Review & checkout'}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <ReceiptModal
         open={receiptOpen}
@@ -609,6 +940,58 @@ export function POSPage() {
         settings={settings}
         transaction={receiptTransaction}
       />
+
+      <Modal
+        open={confirmModalOpen}
+        onClose={() => {
+          setConfirmModalOpen(false)
+          setConfirmTarget(null)
+          setPaymentReference('')
+        }}
+        title={`Konfirmasi ${confirmTarget?.nomor_nota ?? ''}`}
+        description="Dana harus sudah benar-benar masuk sebelum transaksi diselesaikan dan struk dicetak."
+        size="sm"
+      >
+        <div className="space-y-4">
+          <div className="rounded-[16px] bg-[#f7f9f9] p-4 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-[#6d7a77]">Metode</span>
+              <span className="font-bold uppercase text-[#1b1e20]">
+                {confirmTarget?.metode_bayar ?? '-'}
+              </span>
+            </div>
+            <div className="mt-2 flex items-center justify-between">
+              <span className="text-[#6d7a77]">Total</span>
+              <CurrencyDisplay
+                className="font-extrabold text-[#0a7c72]"
+                value={Number(confirmTarget?.total ?? 0)}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
+              Referensi Pembayaran
+            </label>
+            <input
+              type="text"
+              value={paymentReference}
+              onChange={(event) => setPaymentReference(event.target.value)}
+              placeholder="Contoh: mutasi bank / ID QRIS"
+              className="mt-2 h-12 w-full rounded-[14px] border-none bg-[#f1f3f5] px-4 text-sm outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => void handleConfirmPending()}
+            disabled={confirmingPayment}
+            className="flex h-12 w-full items-center justify-center rounded-[14px] bg-[#0a7c72] font-bold text-white disabled:opacity-60"
+          >
+            {confirmingPayment ? 'Mengonfirmasi...' : 'Dana Sudah Masuk'}
+          </button>
+        </div>
+      </Modal>
 
       <ConfirmDialog
         open={showClearConfirm}
@@ -623,6 +1006,17 @@ export function POSPage() {
           setShowClearConfirm(false)
         }}
         onCancel={() => setShowClearConfirm(false)}
+      />
+
+      <ConfirmDialog
+        open={Boolean(cancelTarget)}
+        title="Batalkan Transaksi Pending?"
+        description="Stok produk akan dikembalikan dan transaksi ditandai gagal."
+        confirmLabel={cancelingPayment ? 'Membatalkan...' : 'Ya, Batalkan'}
+        cancelLabel="Tutup"
+        variant="danger"
+        onConfirm={() => void handleCancelPending()}
+        onCancel={() => setCancelTarget(null)}
       />
     </main>
   )

@@ -25,6 +25,10 @@ export const ReceiptPrint = forwardRef<HTMLDivElement, ReceiptPrintProps>(
           <div>No: {transaction.nomor_nota}</div>
           <div>Kasir: {cashier?.nama ?? '-'}</div>
           <div>Bayar: {transaction.metode_bayar.toUpperCase()}</div>
+          <div>Status: {transaction.payment_status.toUpperCase()}</div>
+          {transaction.payment_reference ? (
+            <div>Ref: {transaction.payment_reference}</div>
+          ) : null}
         </div>
         <div className="my-3 border-t border-dashed border-black" />
         <div className="space-y-2 text-[11px]">
@@ -60,7 +64,7 @@ export const ReceiptPrint = forwardRef<HTMLDivElement, ReceiptPrintProps>(
           </div>
           <div className="flex justify-between">
             <span>Bayar</span>
-            <span>{formatRupiah(Number(transaction.uang_diterima ?? 0))}</span>
+            <span>{formatRupiah(Number(transaction.uang_diterima ?? transaction.total ?? 0))}</span>
           </div>
           <div className="flex justify-between font-bold">
             <span>Kembali</span>

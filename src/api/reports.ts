@@ -15,7 +15,7 @@ import type {
   SalesReport,
   TopProduct,
 } from '../types'
-import type { MetodeBayar, TransactionWithKasir } from '../types/database'
+import type { MetodeBayar, PaymentStatus, TransactionWithKasir } from '../types/database'
 
 export async function getDashboardStats(): Promise<DashboardStats> {
   const { data, error } = await supabase.rpc('get_dashboard_stats')
@@ -111,7 +111,7 @@ export async function getDashboardChangeSummary(): Promise<DashboardChangeSummar
 }
 
 export async function getDashboardNotifications(): Promise<DashboardNotification[]> {
-  const [lowStockResult, latestTransactions] = await Promise.all([
+  const [lowStockResult, latestTransactions, pendingTransactionsResult] = await Promise.all([
     supabase
       .from('products_with_category')
       .select('id, nama, stok, stok_minimum')
@@ -120,10 +120,21 @@ export async function getDashboardNotifications(): Promise<DashboardNotification
       .order('stok', { ascending: true })
       .limit(5),
     getLatestTransactions(3),
+    supabase
+      .from('transactions_with_kasir')
+      .select('id, nomor_nota, total, payment_status, metode_bayar')
+      .eq('status', 'selesai')
+      .eq('payment_status', 'menunggu_konfirmasi')
+      .order('created_at', { ascending: false })
+      .limit(3),
   ])
 
   if (lowStockResult.error) {
     throw new Error(lowStockResult.error.message)
+  }
+
+  if (pendingTransactionsResult.error) {
+    throw new Error(pendingTransactionsResult.error.message)
   }
 
   const lowStockNotifications: DashboardNotification[] = (lowStockResult.data ?? []).map(
@@ -150,7 +161,23 @@ export async function getDashboardNotifications(): Promise<DashboardNotification
     href: '/laporan',
   }))
 
-  return [...lowStockNotifications, ...transactionNotifications]
+  const pendingNotifications: DashboardNotification[] = (pendingTransactionsResult.data ?? []).map(
+    (item) => ({
+      id: `pending-${item.id}`,
+      title: `Pending ${item.nomor_nota ?? '-'}`,
+      description: `${item.metode_bayar?.toUpperCase() ?? 'NON TUNAI'} senilai ${Number(
+        item.total ?? 0,
+      ).toLocaleString('id-ID', {
+        style: 'currency',
+        currency: 'IDR',
+        maximumFractionDigits: 0,
+      })} belum dikonfirmasi.`,
+      tone: 'warning',
+      href: '/pos',
+    }),
+  )
+
+  return [...pendingNotifications, ...lowStockNotifications, ...transactionNotifications]
 }
 
 export async function getSalesReport(
@@ -164,6 +191,7 @@ export async function getSalesReport(
     .from('transactions')
     .select('*')
     .eq('status', 'selesai')
+    .eq('payment_status', 'dibayar')
     .gte('created_at', dateFrom)
     .lte('created_at', dateTo)
     .order('created_at', { ascending: true })
@@ -206,6 +234,7 @@ export async function getTopProducts(
     .from('transactions')
     .select('id')
     .eq('status', 'selesai')
+    .eq('payment_status', 'dibayar')
     .gte('created_at', dateFrom)
     .lte('created_at', dateTo)
 
@@ -302,6 +331,7 @@ export async function getLatestTransactions(limit = 5): Promise<TransactionWithK
   const { data, error } = await supabase
     .from('transactions_with_kasir')
     .select('*')
+    .eq('payment_status', 'dibayar')
     .order('created_at', { ascending: false })
     .limit(limit)
 
@@ -341,6 +371,7 @@ export interface ReportSummary {
   jumlahTransaksi: number
   rataRataTransaksi: number
   produkTerlaris: TopProduct | null
+  jumlahPending: number
 }
 
 export interface TransactionHistoryFilters {
@@ -349,6 +380,7 @@ export interface TransactionHistoryFilters {
   dateFrom?: string
   dateTo?: string
   metodeBayar?: 'all' | MetodeBayar
+  paymentStatus?: 'all' | PaymentStatus
   search?: string
 }
 
@@ -411,6 +443,18 @@ export async function getReportSummary(
     getTopProducts(`${dateFrom}T00:00:00`, `${dateTo}T23:59:59`, 1),
   ])
 
+  const { count: pendingCount, error: pendingError } = await supabase
+    .from('transactions')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', 'selesai')
+    .eq('payment_status', 'menunggu_konfirmasi')
+    .gte('created_at', `${dateFrom}T00:00:00`)
+    .lte('created_at', `${dateTo}T23:59:59`)
+
+  if (pendingError) {
+    throw new Error(pendingError.message)
+  }
+
   const totalPenjualan = sales.reduce((sum, item) => sum + item.totalPenjualan, 0)
   const jumlahTransaksi = sales.reduce((sum, item) => sum + item.jumlahTransaksi, 0)
 
@@ -419,6 +463,7 @@ export async function getReportSummary(
     jumlahTransaksi,
     rataRataTransaksi: jumlahTransaksi > 0 ? totalPenjualan / jumlahTransaksi : 0,
     produkTerlaris: topProducts[0] ?? null,
+    jumlahPending: pendingCount ?? 0,
   }
 }
 
@@ -446,6 +491,10 @@ export async function getTransactionHistoryPage(
 
   if (filters.metodeBayar && filters.metodeBayar !== 'all') {
     query = query.eq('metode_bayar', filters.metodeBayar)
+  }
+
+  if (filters.paymentStatus && filters.paymentStatus !== 'all') {
+    query = query.eq('payment_status', filters.paymentStatus)
   }
 
   if (filters.search) {

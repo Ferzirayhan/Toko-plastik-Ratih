@@ -67,8 +67,8 @@ export function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(135deg,_#f8fbfb_0%,_#eef5f4_55%,_#f7faf9_100%)] px-6 py-10">
-      <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-5xl items-center justify-center">
+    <main className="min-h-screen bg-[linear-gradient(135deg,_#f8fbfb_0%,_#eef5f4_55%,_#f7faf9_100%)] px-4 py-6 sm:px-6 sm:py-10">
+      <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-5xl items-center justify-center sm:min-h-[calc(100vh-5rem)]">
         <div className="grid w-full overflow-hidden rounded-[28px] bg-white shadow-[0_20px_60px_rgba(0,32,29,0.12)] lg:grid-cols-[1fr_0.92fr]">
           <section className="relative hidden min-h-[640px] overflow-hidden bg-[linear-gradient(160deg,_#0a7c72_0%,_#0b8f83_100%)] px-9 py-9 text-white lg:flex lg:flex-col lg:justify-between">
             <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.06)_1px,transparent_1px)] bg-[size:56px_56px] opacity-35" />
@@ -101,10 +101,10 @@ export function LoginPage() {
             </div>
           </section>
 
-          <section className="flex min-h-[640px] items-center justify-center px-8 py-10 lg:px-12">
+          <section className="flex min-h-[560px] items-center justify-center px-5 py-8 sm:px-8 sm:py-10 lg:min-h-[640px] lg:px-12">
             <div className="w-full max-w-sm">
               <div>
-                <h2 className="text-[42px] font-extrabold leading-none tracking-[-0.03em] text-[#191c1e]">
+                <h2 className="text-[34px] font-extrabold leading-none tracking-[-0.03em] text-[#191c1e] sm:text-[42px]">
                   Selamat Datang
                 </h2>
                 <p className="mt-3 text-sm font-medium text-[#7b8785]">
