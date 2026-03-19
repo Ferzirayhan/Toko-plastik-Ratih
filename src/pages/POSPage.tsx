@@ -1,0 +1,629 @@
+import { format } from 'date-fns'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createTransaction } from '../api/transactions'
+import {
+  getActiveCategories,
+  getProductByBarcode,
+  getProducts,
+} from '../api/products'
+import { getSettings } from '../api/settings'
+import { CartItem } from '../components/pos/CartItem'
+import { ProductCard } from '../components/pos/ProductCard'
+import { ReceiptModal } from '../components/pos/ReceiptModal'
+import { ConfirmDialog } from '../components/ui/ConfirmDialog'
+import { CurrencyDisplay } from '../components/ui/CurrencyDisplay'
+import { Skeleton } from '../components/ui/Skeleton'
+import { useCartStore } from '../stores/cartStore'
+import { useAuthStore } from '../stores/authStore'
+import { useToastStore } from '../stores/toastStore'
+import { useUIStore } from '../stores/uiStore'
+import type { Category, ProductWithCategory, Transaction, TransactionItem } from '../types/database'
+import { cn } from '../utils/cn'
+
+const paymentMethods = [
+  { value: 'tunai', label: 'Tunai', icon: 'payments' },
+  { value: 'transfer', label: 'Transfer', icon: 'account_balance' },
+  { value: 'qris', label: 'QRIS', icon: 'qr_code_2' },
+  { value: 'debit', label: 'Debit', icon: 'credit_card' },
+] as const
+
+function getPreviewNomorNota() {
+  return `TRP-${format(new Date(), 'yyyyMMdd')}-...`
+}
+
+function isBarcodeQuery(value: string) {
+  const normalizedValue = value.trim()
+  return normalizedValue.length >= 8 && /^[a-zA-Z0-9-]+$/.test(normalizedValue)
+}
+
+export function POSPage() {
+  const user = useAuthStore((state) => state.user)
+  const sidebarCollapsed = useUIStore((state) => state.sidebarCollapsed)
+  const pushToast = useToastStore((state) => state.pushToast)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
+  const {
+    items,
+    diskon_persen,
+    use_ppn,
+    metode_bayar,
+    uang_diterima,
+    subtotal,
+    diskon_amount,
+    ppn_amount,
+    total,
+    kembalian,
+    ppn_persen,
+    addItem,
+    removeItem,
+    updateQty,
+    clearCart,
+    setDiskon,
+    togglePPN,
+    setPpnPersen,
+    setMetodeBayar,
+    setUangDiterima,
+  } = useCartStore()
+
+  const [products, setProducts] = useState<ProductWithCategory[]>([])
+  const [filteredProducts, setFilteredProducts] = useState<ProductWithCategory[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | 'all'>('all')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [uangInput, setUangInput] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [processingPayment, setProcessingPayment] = useState(false)
+  const [settings, setSettings] = useState<Record<string, string>>({})
+  const [receiptOpen, setReceiptOpen] = useState(false)
+  const [receiptTransaction, setReceiptTransaction] = useState<Transaction | null>(null)
+  const [receiptItems, setReceiptItems] = useState<TransactionItem[]>([])
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
+
+  useEffect(() => {
+    searchInputRef.current?.focus()
+  }, [])
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedSearch(searchQuery.trim())
+    }, 300)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [searchQuery])
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadPOSData() {
+      setLoading(true)
+
+      try {
+        const [productsResult, categoriesResult, settingsResult] = await Promise.all([
+          getProducts({ isActive: true }),
+          getActiveCategories(),
+          getSettings(),
+        ])
+
+        if (!isMounted) {
+          return
+        }
+
+        setProducts(productsResult)
+        setCategories(categoriesResult)
+        setSettings(settingsResult)
+
+        const defaultPPN = Number(settingsResult.ppn_persen ?? 0)
+        setPpnPersen(defaultPPN)
+      } catch (error) {
+        if (!isMounted) {
+          return
+        }
+
+        pushToast({
+          title: 'Gagal memuat POS',
+          description:
+            error instanceof Error ? error.message : 'Data POS belum berhasil dimuat.',
+          variant: 'error',
+        })
+      } finally {
+        if (isMounted) {
+          setLoading(false)
+        }
+      }
+    }
+
+    void loadPOSData()
+
+    return () => {
+      isMounted = false
+    }
+  }, [pushToast, setPpnPersen])
+
+  useEffect(() => {
+    let activeProducts = products
+
+    if (selectedCategoryId !== 'all') {
+      activeProducts = activeProducts.filter((product) => product.category_id === selectedCategoryId)
+    }
+
+    if (debouncedSearch) {
+      const lowerCaseQuery = debouncedSearch.toLowerCase()
+      activeProducts = activeProducts.filter((product) => {
+        const nama = product.nama?.toLowerCase() ?? ''
+        const sku = product.sku?.toLowerCase() ?? ''
+        const barcode = product.barcode?.toLowerCase() ?? ''
+        return (
+          nama.includes(lowerCaseQuery) ||
+          sku.includes(lowerCaseQuery) ||
+          barcode.includes(lowerCaseQuery)
+        )
+      })
+    }
+
+    setFilteredProducts(activeProducts)
+  }, [debouncedSearch, products, selectedCategoryId])
+
+  const allCategoryCount = useMemo(
+    () => products.filter((product) => Number(product.stok ?? 0) > 0).length,
+    [products],
+  )
+
+  const quickCashButtons = useMemo(() => {
+    return [total, 50_000, 100_000].filter((value, index, array) => array.indexOf(value) === index)
+  }, [total])
+
+  const isPaymentDisabled =
+    items.length === 0 || (metode_bayar === 'tunai' && uang_diterima < total)
+
+  const handleAddProduct = (product: ProductWithCategory) => {
+    try {
+      addItem(product)
+    } catch (error) {
+      pushToast({
+        title: 'Tidak bisa menambah produk',
+        description: error instanceof Error ? error.message : 'Qty produk melebihi stok.',
+        variant: 'warning',
+      })
+    }
+  }
+
+  const handleBarcodeSearch = async (value: string) => {
+    try {
+      const foundProduct = await getProductByBarcode(value)
+
+      if (!foundProduct) {
+        pushToast({
+          title: 'Barcode tidak ditemukan',
+          description: 'Produk dengan barcode tersebut belum ada di database.',
+          variant: 'warning',
+        })
+        return
+      }
+
+      addItem(foundProduct)
+      setSearchQuery('')
+      pushToast({
+        title: 'Produk ditambahkan',
+        description: foundProduct.nama ?? 'Produk berhasil masuk keranjang.',
+        variant: 'success',
+      })
+    } catch (error) {
+      pushToast({
+        title: 'Barcode tidak ditemukan',
+        description: error instanceof Error ? error.message : 'Produk barcode tidak tersedia.',
+        variant: 'warning',
+      })
+    }
+  }
+
+  const handleProcessPayment = async () => {
+    if (items.length === 0) {
+      return
+    }
+
+    if (metode_bayar === 'tunai' && uang_diterima < total) {
+      pushToast({
+        title: 'Uang kurang',
+        description: 'Nominal uang diterima masih di bawah total pembayaran.',
+        variant: 'warning',
+      })
+      return
+    }
+
+    setProcessingPayment(true)
+
+    try {
+      const result = await createTransaction({
+        items: items.map((item) => ({
+          productId: item.product_id,
+          namaProduk: item.nama_produk,
+          hargaSatuan: item.harga_satuan,
+          qty: item.qty,
+          subtotal: item.subtotal,
+        })),
+        subtotal,
+        diskonPersen: diskon_persen,
+        diskonAmount: diskon_amount,
+        ppnPersen: use_ppn ? ppn_persen : 0,
+        ppnAmount: ppn_amount,
+        total,
+        metodeBayar: metode_bayar,
+        uangDiterima: metode_bayar === 'tunai' ? uang_diterima : total,
+        kembalian: metode_bayar === 'tunai' ? kembalian : 0,
+      })
+
+      setReceiptTransaction(result.transaction)
+      setReceiptItems(result.items)
+      setReceiptOpen(true)
+      pushToast({
+        title: 'Pembayaran berhasil',
+        description: `Transaksi ${result.transaction.nomor_nota} tersimpan.`,
+        variant: 'success',
+      })
+    } catch (error) {
+      pushToast({
+        title: 'Transaksi gagal',
+        description:
+          error instanceof Error ? error.message : 'Sistem belum berhasil memproses pembayaran.',
+        variant: 'error',
+      })
+    } finally {
+      setProcessingPayment(false)
+    }
+  }
+
+  const handleNewTransaction = () => {
+    clearCart()
+    setPpnPersen(Number(settings.ppn_persen ?? 0))
+    setReceiptOpen(false)
+    setReceiptTransaction(null)
+    setReceiptItems([])
+    setSearchQuery('')
+    setUangInput('')
+    searchInputRef.current?.focus()
+  }
+
+  return (
+    <main
+      className={cn(
+        'min-h-screen bg-[#f7f9f9] transition-[margin] duration-200',
+        sidebarCollapsed ? 'ml-16' : 'ml-[220px]',
+      )}
+    >
+      <div className="grid min-h-screen grid-cols-[220px_minmax(0,1fr)_340px]">
+        <section className="border-r border-[#eef1f1] bg-white px-4 py-6">
+          <div>
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
+              Cari Produk
+            </p>
+            <div className="relative mt-3">
+              <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a19f]">
+                search
+              </span>
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    const trimmed = searchQuery.trim()
+
+                    if (isBarcodeQuery(trimmed)) {
+                      void handleBarcodeSearch(trimmed)
+                    }
+                  }
+                }}
+                placeholder="Nama produk atau SKU"
+                className="h-12 w-full rounded-[14px] border-none bg-[#f1f3f5] pl-12 pr-4 text-sm outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+              />
+            </div>
+          </div>
+
+          <div className="mt-8">
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
+              Kategori
+            </p>
+            <div className="mt-3 space-y-2">
+              <button
+                type="button"
+                onClick={() => setSelectedCategoryId('all')}
+                className={cn(
+                  'flex w-full items-center justify-between rounded-[14px] px-4 py-3 text-left text-sm font-bold transition-colors',
+                  selectedCategoryId === 'all'
+                    ? 'bg-[#0a7c72] text-white'
+                    : 'bg-white text-[#2e3132] shadow-[0_4px_16px_rgba(15,23,42,0.04)]',
+                )}
+              >
+                <span>Semua</span>
+                <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px]">
+                  {allCategoryCount}
+                </span>
+              </button>
+
+              {categories.map((category) => {
+                const count = products.filter((product) => product.category_id === category.id).length
+
+                return (
+                  <button
+                    key={category.id}
+                    type="button"
+                    onClick={() => setSelectedCategoryId(category.id)}
+                    className={cn(
+                      'flex w-full items-center justify-between rounded-[14px] px-4 py-3 text-left text-sm font-semibold transition-colors',
+                      selectedCategoryId === category.id
+                        ? 'bg-[#e7f8f6] text-[#0a7c72]'
+                        : 'bg-white text-[#52627d] shadow-[0_4px_16px_rgba(15,23,42,0.04)] hover:bg-[#f7f9f9]',
+                    )}
+                  >
+                    <span>{category.nama}</span>
+                    <span className="text-[10px]">{count}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="mt-auto pt-8 text-xs font-medium text-[#98a19f]">
+            Scan barcode juga didukung. Fokus otomatis aktif saat halaman dibuka.
+          </div>
+        </section>
+
+        <section className="px-6 py-6">
+          <div className="mb-5 flex items-start justify-between">
+            <div>
+              <h1 className="text-[20px] font-extrabold tracking-[-0.03em] text-[#1b1e20]">
+                Katalog Produk
+              </h1>
+              <p className="mt-1 text-sm font-medium text-[#8b9895]">
+                Pilih produk untuk menambahkannya ke nota penjualan.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 rounded-full bg-white px-4 py-2 shadow-[0_4px_16px_rgba(15,23,42,0.04)]">
+              <span className="material-symbols-outlined text-[#8b9895]">account_circle</span>
+              <div>
+                <p className="text-sm font-bold text-[#1b1e20]">{user?.nama ?? 'Kasir'}</p>
+                <p className="text-[11px] font-medium text-[#8b9895]">Belanja</p>
+              </div>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="grid grid-cols-3 gap-4">
+              {Array.from({ length: 12 }).map((_, index) => (
+                <Skeleton key={index} className="h-[220px] rounded-[18px]" />
+              ))}
+            </div>
+          ) : filteredProducts.length > 0 ? (
+            <div className="grid grid-cols-3 gap-4">
+              {filteredProducts.map((product) => (
+                <ProductCard key={product.id} product={product} onAdd={handleAddProduct} />
+              ))}
+            </div>
+          ) : (
+            <div className="flex h-[420px] flex-col items-center justify-center rounded-[20px] bg-white text-center shadow-[0_6px_20px_rgba(15,23,42,0.04)]">
+              <span className="material-symbols-outlined text-[48px] text-[#c3cbca]">search_off</span>
+              <p className="mt-4 text-lg font-bold text-[#1b1e20]">Produk tidak ditemukan</p>
+              <p className="mt-2 text-sm font-medium text-[#8b9895]">
+                Coba ubah kata kunci pencarian atau pilih kategori lain.
+              </p>
+            </div>
+          )}
+        </section>
+
+        <section className="border-l border-[#eef1f1] bg-white px-4 py-5 shadow-[-8px_0_24px_rgba(15,23,42,0.03)]">
+          <div className="flex items-center justify-between border-b border-[#eef1f1] pb-4">
+            <div>
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
+                Nota Penjualan
+              </p>
+              <p className="mt-1 text-base font-extrabold text-[#1b1e20]">{getPreviewNomorNota()}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => items.length > 0 && setShowClearConfirm(true)}
+              disabled={items.length === 0}
+              className="text-xs font-bold uppercase tracking-[0.08em] text-[#d63f2f] disabled:cursor-not-allowed disabled:text-[#c7cfd1]"
+            >
+              Hapus Semua
+            </button>
+          </div>
+
+          <div className="custom-scrollbar mt-4 max-h-[calc(100vh-420px)] space-y-3 overflow-y-auto pr-1">
+            {items.length > 0 ? (
+              items.map((item) => (
+                <CartItem
+                  key={item.product_id}
+                  item={item}
+                  onDecrease={() => {
+                    try {
+                      updateQty(item.product_id, item.qty - 1)
+                    } catch (error) {
+                      pushToast({
+                        title: 'Qty tidak valid',
+                        description:
+                          error instanceof Error ? error.message : 'Qty produk melebihi stok.',
+                        variant: 'warning',
+                      })
+                    }
+                  }}
+                  onIncrease={() => {
+                    try {
+                      updateQty(item.product_id, item.qty + 1)
+                    } catch (error) {
+                      pushToast({
+                        title: 'Qty tidak valid',
+                        description:
+                          error instanceof Error ? error.message : 'Qty produk melebihi stok.',
+                        variant: 'warning',
+                      })
+                    }
+                  }}
+                  onRemove={() => removeItem(item.product_id)}
+                />
+              ))
+            ) : (
+              <div className="flex h-56 flex-col items-center justify-center rounded-[18px] bg-[#f7f9f9] text-center">
+                <span className="material-symbols-outlined text-[40px] text-[#c3cbca]">shopping_cart</span>
+                <p className="mt-3 text-sm font-bold text-[#1b1e20]">Keranjang masih kosong</p>
+                <p className="mt-1 text-xs font-medium text-[#8b9895]">
+                  Klik produk di katalog untuk mulai transaksi.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-4 rounded-[20px] bg-[#f7f9f9] p-4">
+            <div className="space-y-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-[#6d7a77]">Subtotal</span>
+                <CurrencyDisplay className="font-bold text-[#1b1e20]" value={subtotal} />
+              </div>
+
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[#6d7a77]">Diskon</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-[#8b9895]">%</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={diskon_persen}
+                    onChange={(event) => setDiskon(Number(event.target.value))}
+                    className="h-8 w-20 rounded-[10px] border-none bg-white px-3 text-right text-sm font-bold outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 text-[#6d7a77]">
+                  <input
+                    type="checkbox"
+                    checked={use_ppn}
+                    onChange={() => togglePPN()}
+                    className="h-4 w-4 rounded border-[#c9d1cf] text-[#0a7c72] focus:ring-[#0a7c72]/15"
+                  />
+                  PPN ({ppn_persen}%)
+                </label>
+                <CurrencyDisplay className="font-bold text-[#1b1e20]" value={ppn_amount} />
+              </div>
+            </div>
+
+            <div className="my-4 h-px bg-[#e6ebea]" />
+
+            <div className="flex items-center justify-between">
+              <span className="text-[16px] font-extrabold text-[#1b1e20]">Total</span>
+              <CurrencyDisplay className="text-[22px] font-extrabold text-[#0a7c72]" value={total} />
+            </div>
+
+            <div className="mt-5">
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
+                Metode Pembayaran
+              </p>
+              <div className="mt-3 grid grid-cols-4 gap-2">
+                {paymentMethods.map((method) => (
+                  <button
+                    key={method.value}
+                    type="button"
+                    onClick={() => setMetodeBayar(method.value)}
+                    className={cn(
+                      'flex flex-col items-center justify-center rounded-[14px] px-2 py-3 text-[11px] font-bold transition-colors',
+                      metode_bayar === method.value
+                        ? 'bg-[#0a7c72] text-white shadow-[0_12px_24px_rgba(10,124,114,0.22)]'
+                        : 'bg-white text-[#52627d]',
+                    )}
+                  >
+                    <span className="material-symbols-outlined text-[18px]">{method.icon}</span>
+                    <span className="mt-1">{method.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {metode_bayar === 'tunai' ? (
+              <div className="mt-5 space-y-3">
+                <div>
+                  <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
+                    Uang Diterima
+                  </p>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={uangInput}
+                    onChange={(event) => {
+                      const raw = event.target.value.replace(/[^0-9]/g, '')
+                      setUangInput(raw ? new Intl.NumberFormat('id-ID').format(parseInt(raw, 10)) : '')
+                      setUangDiterima(raw ? parseInt(raw, 10) : 0)
+                    }}
+                    onFocus={(event) => event.target.select()}
+                    placeholder="0"
+                    className="mt-2 h-12 w-full rounded-[14px] border-none bg-white px-4 text-right text-lg font-extrabold text-[#1b1e20] outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+                  />
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  {quickCashButtons.map((amount, index) => (
+                    <button
+                      key={`${amount}-${index}`}
+                      type="button"
+                      onClick={() => {
+                        setUangDiterima(amount)
+                        setUangInput(new Intl.NumberFormat('id-ID').format(amount))
+                      }}
+                      className="rounded-[12px] bg-white px-3 py-2 text-xs font-bold text-[#0a7c72]"
+                    >
+                      {index === 0 ? 'Uang Pas' : new Intl.NumberFormat('id-ID').format(amount)}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between rounded-[14px] bg-[#fff5e8] px-4 py-3">
+                  <span className="text-sm font-bold text-[#855300]">Kembalian</span>
+                  <CurrencyDisplay className="text-xl font-extrabold text-[#855300]" value={kembalian} />
+                </div>
+              </div>
+            ) : null}
+
+            <button
+              type="button"
+              disabled={isPaymentDisabled || processingPayment}
+              onClick={() => void handleProcessPayment()}
+              className="mt-5 flex h-14 w-full items-center justify-center gap-2 rounded-[16px] bg-[#0a7c72] text-base font-extrabold text-white shadow-[0_12px_24px_rgba(10,124,114,0.24)] transition hover:bg-[#086b62] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <span>{processingPayment ? 'Memproses...' : 'PROSES PEMBAYARAN'}</span>
+              <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+            </button>
+          </div>
+        </section>
+      </div>
+
+      <ReceiptModal
+        open={receiptOpen}
+        cashier={user}
+        items={receiptItems}
+        onClose={() => setReceiptOpen(false)}
+        onNewTransaction={handleNewTransaction}
+        settings={settings}
+        transaction={receiptTransaction}
+      />
+
+      <ConfirmDialog
+        open={showClearConfirm}
+        title="Hapus Semua Item?"
+        description="Semua item di keranjang akan dihapus. Tindakan ini tidak bisa dibatalkan."
+        confirmLabel="Ya, Hapus"
+        cancelLabel="Batal"
+        variant="danger"
+        onConfirm={() => {
+          clearCart()
+          setUangInput('')
+          setShowClearConfirm(false)
+        }}
+        onCancel={() => setShowClearConfirm(false)}
+      />
+    </main>
+  )
+}

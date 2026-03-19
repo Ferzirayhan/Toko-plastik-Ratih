@@ -1,0 +1,72 @@
+import type { CartItem as CartItemType } from '../../types'
+import { formatRupiah } from '../../utils/currency'
+
+interface CartItemProps {
+  item: CartItemType
+  onDecrease: () => void
+  onIncrease: () => void
+  onRemove: () => void
+}
+
+export function CartItem({ item, onDecrease, onIncrease, onRemove }: CartItemProps) {
+  return (
+    <div className="flex gap-3 rounded-[18px] bg-white p-3 shadow-[0_6px_18px_rgba(15,23,42,0.04)]">
+      {item.foto_url ? (
+        <img
+          src={item.foto_url}
+          alt={item.nama_produk}
+          className="h-14 w-14 rounded-[14px] object-cover"
+        />
+      ) : (
+        <div className="flex h-14 w-14 items-center justify-center rounded-[14px] bg-[#e7f8f6] text-[#0a7c72]">
+          <span className="material-symbols-outlined">shopping_bag</span>
+        </div>
+      )}
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="line-clamp-2 text-sm font-extrabold text-[#1b1e20]">
+              {item.nama_produk}
+            </p>
+            <p className="mt-1 text-xs font-medium text-[#8b9895]">
+              {formatRupiah(item.harga_satuan)}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onRemove}
+            className="rounded-full p-1 text-[#a0aaa7] transition-colors hover:bg-[#fff1ed] hover:text-[#d63f2f]"
+          >
+            <span className="material-symbols-outlined text-[18px]">close</span>
+          </button>
+        </div>
+
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <div className="flex items-center rounded-[12px] bg-[#f4f6f7] p-1">
+            <button
+              type="button"
+              onClick={onDecrease}
+              className="flex h-8 w-8 items-center justify-center rounded-[10px] text-[#0a7c72] transition-colors hover:bg-white"
+            >
+              <span className="material-symbols-outlined text-[18px]">remove</span>
+            </button>
+            <span className="w-8 text-center text-sm font-extrabold text-[#1b1e20]">
+              {item.qty}
+            </span>
+            <button
+              type="button"
+              onClick={onIncrease}
+              disabled={item.qty >= item.stok_tersedia}
+              className="flex h-8 w-8 items-center justify-center rounded-[10px] text-[#0a7c72] transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <span className="material-symbols-outlined text-[18px]">add</span>
+            </button>
+          </div>
+
+          <p className="text-sm font-extrabold text-[#1b1e20]">{formatRupiah(item.subtotal)}</p>
+        </div>
+      </div>
+    </div>
+  )
+}

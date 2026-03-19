@@ -1,0 +1,158 @@
+import { create } from 'zustand'
+import type { Session, Subscription } from '@supabase/supabase-js'
+import { supabase } from '../lib/supabase'
+import type { Profile } from '../types/database'
+
+interface AuthState {
+  user: Profile | null
+  session: Session | null
+  loading: boolean
+  initialized: boolean
+  error: string | null
+  isAdmin: boolean
+  initialize: () => Promise<void>
+  login: (email: string, password: string) => Promise<void>
+  logout: () => Promise<void>
+  getProfile: (userId?: string) => Promise<Profile | null>
+  clearError: () => void
+}
+
+let authSubscription: Subscription | null = null
+
+export const useAuthStore = create<AuthState>((set, get) => ({
+  user: null,
+  session: null,
+  loading: true,
+  initialized: false,
+  error: null,
+  isAdmin: false,
+
+  initialize: async () => {
+    if (get().initialized) {
+      return
+    }
+
+    set({ loading: true, error: null })
+
+    const { data, error } = await supabase.auth.getSession()
+
+    if (error) {
+      set({
+        loading: false,
+        initialized: true,
+        error: error.message,
+        session: null,
+        user: null,
+        isAdmin: false,
+      })
+      return
+    }
+
+    const session = data.session
+    const profile = session?.user?.id
+      ? await get().getProfile(session.user.id)
+      : null
+
+    set({
+      session,
+      user: profile,
+      isAdmin: profile?.role === 'admin',
+      loading: false,
+      initialized: true,
+    })
+
+    if (!authSubscription) {
+      const { data: authListener } = supabase.auth.onAuthStateChange(
+        (_event, nextSession) => {
+          void (async () => {
+            const nextProfile = nextSession?.user?.id
+              ? await get().getProfile(nextSession.user.id)
+              : null
+
+            set({
+              session: nextSession,
+              user: nextProfile,
+              isAdmin: nextProfile?.role === 'admin',
+              loading: false,
+              initialized: true,
+            })
+          })()
+        },
+      )
+
+      authSubscription = authListener.subscription
+    }
+  },
+
+  login: async (email, password) => {
+    set({ loading: true, error: null })
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+
+    if (error) {
+      set({
+        loading: false,
+        error: 'Email atau password salah',
+        session: null,
+        user: null,
+        isAdmin: false,
+      })
+      throw error
+    }
+
+    const profile = data.user?.id ? await get().getProfile(data.user.id) : null
+
+    set({
+      session: data.session,
+      user: profile,
+      isAdmin: profile?.role === 'admin',
+      loading: false,
+      error: null,
+    })
+  },
+
+  logout: async () => {
+    set({ loading: true, error: null })
+
+    const { error } = await supabase.auth.signOut()
+
+    if (error) {
+      set({ loading: false, error: error.message })
+      throw error
+    }
+
+    set({
+      session: null,
+      user: null,
+      isAdmin: false,
+      loading: false,
+      error: null,
+    })
+  },
+
+  getProfile: async (userId) => {
+    const targetUserId = userId ?? get().session?.user.id
+
+    if (!targetUserId) {
+      return null
+    }
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', targetUserId)
+      .maybeSingle()
+
+    if (error) {
+      set({ error: error.message })
+      return null
+    }
+
+    return data
+  },
+
+  clearError: () => set({ error: null }),
+}))
