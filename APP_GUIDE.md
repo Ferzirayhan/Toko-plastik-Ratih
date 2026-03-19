@@ -1,4 +1,4 @@
-# POS Toko Plastik Ratih
+# POS Tara Plastic
 
 Panduan ini dibuat supaya kamu cepat paham isi aplikasi, alur fiturnya, dan cara menjalankannya dari awal sampai siap dipakai.
 

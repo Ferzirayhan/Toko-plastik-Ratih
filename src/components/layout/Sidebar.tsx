@@ -4,6 +4,7 @@ import { getDashboardStats } from '../../api/reports'
 import { useAuthStore } from '../../stores/authStore'
 import { useUIStore } from '../../stores/uiStore'
 import { cn } from '../../utils/cn'
+import { BrandMark } from '../app/BrandMark'
 import { Badge } from '../ui/Badge'
 
 interface MenuItem {
@@ -69,12 +70,17 @@ export function Sidebar() {
       >
       <div className={cn('flex items-start justify-between px-1 md:px-0', desktopCollapsed ? 'md:px-0.5' : 'md:px-3')}>
         <div className={cn(desktopCollapsed ? 'md:hidden' : '')}>
-          <p className="text-[13px] font-extrabold leading-none tracking-[-0.02em] text-[#0a7c72]">
-            Toko Plastik Ratih
-          </p>
-          <p className="mt-1 text-[10px] font-medium uppercase tracking-[0.12em] text-[#8b9895]">
-            Management System
-          </p>
+          <div className="flex items-center gap-2.5">
+            <BrandMark size="sm" className="shadow-[0_8px_18px_rgba(10,124,114,0.14)]" />
+            <div>
+              <p className="text-[13px] font-extrabold leading-none tracking-[-0.02em] text-[#0a7c72]">
+                Tara Plastic
+              </p>
+              <p className="mt-1 text-[10px] font-medium uppercase tracking-[0.12em] text-[#8b9895]">
+                Management System
+              </p>
+            </div>
+          </div>
         </div>
         <button
           type="button"
@@ -98,9 +104,7 @@ export function Sidebar() {
 
       {desktopCollapsed ? (
         <div className="mt-3 hidden justify-center md:flex">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#eef8f6] text-[#0a7c72]">
-            <span className="material-symbols-outlined text-[18px]">storefront</span>
-          </div>
+          <BrandMark size="sm" className="shadow-[0_8px_16px_rgba(10,124,114,0.12)]" />
         </div>
       ) : null}
 
@@ -152,6 +156,7 @@ export function Sidebar() {
             <p className="mt-1 text-[10px] font-medium uppercase tracking-[0.16em] text-outline">
               {user?.role ?? 'Tanpa role'}
             </p>
+            <p className="mt-3 text-[10px] font-medium text-[#8b9895]">Made by Ezi with love</p>
           </div>
         ) : (
           <div className="hidden justify-center px-1 py-2 md:flex">

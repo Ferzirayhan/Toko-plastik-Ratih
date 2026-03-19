@@ -17,8 +17,14 @@ export const ReceiptPrint = forwardRef<HTMLDivElement, ReceiptPrintProps>(
         className="bg-white p-4 text-black"
         style={{ width: '58mm', fontFamily: 'monospace' }}
       >
+        <div className="mb-2 flex items-center justify-center gap-2 text-[11px] font-bold">
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded-[6px] bg-black text-[9px] tracking-[-0.08em] text-white">
+            TP
+          </span>
+          <span>Tara Plastic</span>
+        </div>
         <div className="text-center text-[12px] whitespace-pre-line">
-          {settings.header_struk || 'Toko Plastik Ratih'}
+          {settings.header_struk || 'Tara Plastic'}
         </div>
         <div className="my-3 border-t border-dashed border-black" />
         <div className="space-y-1 text-[11px]">

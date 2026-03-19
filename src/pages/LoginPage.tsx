@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { z } from 'zod'
+import { BrandMark } from '../components/app/BrandMark'
 import { useAuthStore } from '../stores/authStore'
 
 const loginSchema = z.object({
@@ -74,8 +75,8 @@ export function LoginPage() {
             <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.06)_1px,transparent_1px)] bg-[size:56px_56px] opacity-35" />
             <div className="relative z-10">
               <div className="flex items-center gap-3 text-[15px] font-bold">
-                <span className="material-symbols-outlined text-[22px]">shopping_bag</span>
-                <span>Toko Plastik Ratih</span>
+                <BrandMark size="sm" inverted />
+                <span>Tara Plastic</span>
               </div>
             </div>
 
@@ -108,7 +109,7 @@ export function LoginPage() {
                   Selamat Datang
                 </h2>
                 <p className="mt-3 text-sm font-medium text-[#7b8785]">
-                  Sistem Kasir Toko Plastik Ratih
+                  Sistem Kasir Tara Plastic
                 </p>
               </div>
 
@@ -213,6 +214,7 @@ export function LoginPage() {
               </form>
 
               <div className="mt-10 border-t border-[#eef1f1] pt-6 text-center text-sm text-[#889391]">
+                <p className="mb-2 text-xs font-medium text-[#93a09d]">Made by Ezi with love</p>
                 Butuh bantuan teknis?{' '}
                 <span className="font-bold text-[#0a7c72]">Hubungi IT Support</span>
               </div>

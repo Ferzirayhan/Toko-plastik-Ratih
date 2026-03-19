@@ -114,9 +114,9 @@ export async function getDashboardNotifications(): Promise<DashboardNotification
   const [lowStockResult, latestTransactions, pendingTransactionsResult] = await Promise.all([
     supabase
       .from('products_with_category')
-      .select('id, nama, stok, stok_minimum')
+      .select('id, nama, stok, stok_minimum, stok_status')
       .eq('is_active', true)
-      .lte('stok', 5)
+      .in('stok_status', ['menipis', 'habis'])
       .order('stok', { ascending: true })
       .limit(5),
     getLatestTransactions(3),
@@ -142,7 +142,7 @@ export async function getDashboardNotifications(): Promise<DashboardNotification
       id: `stock-${item.id}`,
       title: `${item.nama} menipis`,
       description: `Sisa stok ${item.stok ?? 0} dari minimum ${item.stok_minimum ?? 0}.`,
-      tone: (item.stok ?? 0) <= 0 ? 'danger' : 'warning',
+      tone: item.stok_status === 'habis' ? 'danger' : 'warning',
       href: '/stok',
     }),
   )

@@ -1,6 +1,6 @@
-# Toko Plastik Ratih POS
+# Tara Plastic POS
 
-Aplikasi Point of Sale untuk Toko Plastik Ratih berbasis React, TypeScript, Tailwind CSS, dan Supabase local.
+Aplikasi Point of Sale untuk Tara Plastic berbasis React, TypeScript, Tailwind CSS, dan Supabase local.
 
 ## Stack
 

@@ -1,3 +1,4 @@
+import { BrandMark } from '../app/BrandMark'
 import { PWAInstallPrompt } from '../app/PWAInstallPrompt'
 import { Outlet } from 'react-router-dom'
 import { useAuthStore } from '../../stores/authStore'
@@ -36,12 +37,17 @@ export function AppLayout() {
           </button>
 
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[14px] font-extrabold tracking-[-0.03em] text-[#0a7c72]">
-              Toko Plastik Ratih
-            </p>
-            <p className="truncate text-[10px] font-medium uppercase tracking-[0.12em] text-[#8b9895]">
-              {user?.nama ?? 'Management System'}
-            </p>
+            <div className="flex min-w-0 items-center gap-2.5">
+              <BrandMark size="sm" className="shadow-[0_8px_18px_rgba(10,124,114,0.14)]" />
+              <div className="min-w-0">
+                <p className="truncate text-[14px] font-extrabold tracking-[-0.03em] text-[#0a7c72]">
+                  Tara Plastic
+                </p>
+                <p className="truncate text-[10px] font-medium uppercase tracking-[0.12em] text-[#8b9895]">
+                  {user?.nama ?? 'Management System'}
+                </p>
+              </div>
+            </div>
           </div>
 
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] bg-[#0a7c72] text-sm font-extrabold text-white shadow-[0_8px_16px_rgba(10,124,114,0.18)]">

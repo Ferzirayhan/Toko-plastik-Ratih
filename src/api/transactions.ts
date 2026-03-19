@@ -45,6 +45,40 @@ export interface TransactionDetail {
   items: TransactionItem[]
 }
 
+const TRANSACTION_SYNC_RETRY_LIMIT = 5
+const TRANSACTION_SYNC_DELAY_MS = 250
+
+async function waitForTransactionDetail(
+  id: number,
+  predicate: (detail: TransactionDetail) => boolean,
+): Promise<TransactionDetail> {
+  let lastDetail: TransactionDetail | null = null
+
+  for (let attempt = 0; attempt < TRANSACTION_SYNC_RETRY_LIMIT; attempt += 1) {
+    const detail = await getTransactionById(id)
+
+    if (!detail) {
+      throw new Error('Detail transaksi tidak ditemukan')
+    }
+
+    lastDetail = detail
+
+    if (predicate(detail)) {
+      return detail
+    }
+
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, TRANSACTION_SYNC_DELAY_MS)
+    })
+  }
+
+  if (lastDetail) {
+    return lastDetail
+  }
+
+  throw new Error('Detail transaksi tidak ditemukan')
+}
+
 async function getCurrentProfileId(): Promise<string | null> {
   const {
     data: { user },
@@ -224,13 +258,10 @@ export async function confirmTransactionPayment(
     throw new Error(error.message)
   }
 
-  const detail = await getTransactionById(id)
-
-  if (!detail) {
-    throw new Error('Detail transaksi yang dikonfirmasi tidak ditemukan')
-  }
-
-  return detail
+  return waitForTransactionDetail(
+    id,
+    (detail) => detail.transaction.payment_status === 'dibayar',
+  )
 }
 
 export async function cancelPendingTransaction(
@@ -246,13 +277,12 @@ export async function cancelPendingTransaction(
     throw new Error(error.message)
   }
 
-  const detail = await getTransactionById(id)
-
-  if (!detail) {
-    throw new Error('Detail transaksi yang dibatalkan tidak ditemukan')
-  }
-
-  return detail
+  return waitForTransactionDetail(
+    id,
+    (detail) =>
+      detail.transaction.status === 'batal' &&
+      detail.transaction.payment_status === 'gagal',
+  )
 }
 
 export async function cancelTransaction(id: number): Promise<Transaction> {

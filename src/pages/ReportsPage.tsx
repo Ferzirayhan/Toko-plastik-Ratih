@@ -691,7 +691,7 @@ export function ReportsPage() {
             cashier={user}
             items={selectedItems}
             settings={{
-              header_struk: 'Toko Plastik Ratih',
+              header_struk: 'Tara Plastic',
               footer_struk: 'Terima kasih telah berbelanja',
             }}
             transaction={printableTransaction}

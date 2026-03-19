@@ -75,9 +75,9 @@ $$;
 
 INSERT INTO store_settings (key, value)
 VALUES
-  ('payment_qris_label', 'QRIS Toko Plastik Ratih'),
+  ('payment_qris_label', 'QRIS Tara Plastic'),
   ('payment_transfer_label', 'Transfer Bank'),
-  ('payment_transfer_account_name', 'Toko Plastik Ratih'),
+  ('payment_transfer_account_name', 'Tara Plastic'),
   ('payment_transfer_account_number', ''),
   ('payment_transfer_bank', ''),
   ('payment_whatsapp_number', ''),

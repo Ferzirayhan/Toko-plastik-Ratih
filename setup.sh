@@ -2,7 +2,7 @@
 
 set -eu
 
-echo "Menjalankan setup project Toko Plastik Ratih POS..."
+echo "Menjalankan setup project Tara Plastic POS..."
 
 if [ ! -f package.json ]; then
   npm create vite@latest . -- --template react-ts
