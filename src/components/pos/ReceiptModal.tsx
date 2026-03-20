@@ -4,7 +4,7 @@ import { Modal } from '../ui/Modal'
 import { Button } from '../ui/Button'
 import { CurrencyDisplay } from '../ui/CurrencyDisplay'
 import type { Profile, Transaction, TransactionItem } from '../../types/database'
-import { ReceiptPrint } from './ReceiptPrint'
+import { ReceiptPrint, receiptPrintPageStyle } from './ReceiptPrint'
 import { buildWhatsAppUrl } from '../../utils/whatsapp'
 
 interface ReceiptModalProps {
@@ -31,6 +31,7 @@ export function ReceiptModal({
   const handlePrint = useReactToPrint({
     contentRef: printRef,
     documentTitle: transaction?.nomor_nota ?? 'struk-transaksi',
+    pageStyle: receiptPrintPageStyle,
   })
 
   const whatsappText = useMemo(() => {
@@ -179,7 +180,7 @@ export function ReceiptModal({
         </div>
       </div>
 
-      <div className="hidden">
+      <div aria-hidden="true" className="fixed -left-[9999px] top-0">
         <ReceiptPrint
           ref={printRef}
           cashier={cashier}

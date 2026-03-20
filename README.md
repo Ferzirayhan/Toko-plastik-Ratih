@@ -1,6 +1,6 @@
 # Tara Plastic POS
 
-Aplikasi Point of Sale untuk Tara Plastic berbasis React, TypeScript, Tailwind CSS, dan Supabase local.
+Aplikasi Point of Sale untuk Tara Plastic berbasis React, TypeScript, Tailwind CSS, dan Supabase.
 
 ## Stack
 
@@ -8,7 +8,7 @@ Aplikasi Point of Sale untuk Tara Plastic berbasis React, TypeScript, Tailwind C
 - Styling: Tailwind CSS v3
 - State management: Zustand
 - Routing: React Router v6
-- Backend: Supabase local
+- Backend: Supabase
 - Database: PostgreSQL via Supabase
 - Auth: Supabase Auth email/password
 - Storage: Supabase Storage
@@ -23,6 +23,36 @@ Aplikasi Point of Sale untuk Tara Plastic berbasis React, TypeScript, Tailwind C
 - npm 9+
 - Docker Desktop atau Colima
 - Supabase CLI
+
+## Supabase Cloud
+
+Project ini sudah siap dipindahkan ke Supabase Cloud. Alur yang disarankan:
+
+```bash
+supabase link --project-ref YOUR_PROJECT_REF
+supabase db push --include-seed
+```
+
+Lalu isi environment frontend:
+
+```env
+VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+VITE_SUPABASE_ANON_KEY=YOUR_ANON_KEY
+```
+
+Catatan penting:
+
+- migration sekarang juga membuat bucket storage `products` beserta policy-nya
+- user Auth dari Supabase local tidak otomatis pindah ke cloud, jadi admin dan kasir perlu dibuat ulang di dashboard cloud
+- setelah user dibuat, isi tabel `profiles` agar role aplikasi terbaca
+
+Contoh insert profile:
+
+```sql
+INSERT INTO profiles (id, nama, username, role, is_active)
+VALUES
+('UUID_USER', 'Nama Pengguna', 'username', 'admin', true);
+```
 
 ## Menjalankan Supabase Local
 
@@ -107,16 +137,7 @@ VALUES
 
 ## Storage Bucket Produk
 
-Buat bucket untuk foto produk di Supabase Studio:
-
-1. Buka `Storage`
-2. Klik `New bucket`
-3. Nama bucket: `products`
-4. Public: `true`
-5. Allowed MIME types:
-   - `image/jpeg`
-   - `image/png`
-   - `image/webp`
+Bucket `products` sekarang dibuat otomatis lewat migration, termasuk policy akses gambar publik dan upload khusus admin.
 
 ## Urutan Setup yang Disarankan
 
@@ -152,11 +173,16 @@ supabase/
 npm run dev
 npm run build
 npm run lint
+supabase link --project-ref YOUR_PROJECT_REF
+supabase db push --include-seed
 supabase start
 supabase db reset
+bash scripts/reset-uat-cloud.sh YOUR_DB_PASSWORD
 ```
 
 ## Catatan
 
 - Function laporan `get_sales_by_date` ada di migration `002_reports_functions.sql`, jadi setelah update migration jalankan lagi `supabase db reset`.
 - Untuk operasi admin Auth seperti `createUser` atau `updateUserById`, aplikasi client ini sengaja tidak memakai `service_role` demi keamanan. Gunakan Supabase Studio untuk pembuatan user baru.
+- Untuk go-live di cloud, lihat checklist di `DEPLOY_CHECKLIST.md`.
+- Untuk mengosongkan data testing di Supabase Cloud tanpa setup ulang project, jalankan `bash scripts/reset-uat-cloud.sh YOUR_DB_PASSWORD`. Script ini mempertahankan akun default `admin@ratih.com` dan `kasir1@ratih.com`, menghapus data operasional, mengembalikan `store_settings` ke seed awal, dan membersihkan foto produk di bucket `products`.

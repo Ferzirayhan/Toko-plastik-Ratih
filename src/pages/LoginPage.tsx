@@ -96,9 +96,6 @@ export function LoginPage() {
                 <div className="h-9 w-9 rounded-full border-2 border-white bg-[#ffdcb8]" />
                 <div className="h-9 w-9 rounded-full border-2 border-white bg-[#ffdbce]" />
               </div>
-              <p className="text-sm font-medium text-white/85">
-                Dipercaya oleh 12+ staf operasional
-              </p>
             </div>
           </section>
 
@@ -213,11 +210,6 @@ export function LoginPage() {
                 </button>
               </form>
 
-              <div className="mt-10 border-t border-[#eef1f1] pt-6 text-center text-sm text-[#889391]">
-                <p className="mb-2 text-xs font-medium text-[#93a09d]">Made by Ezi with love</p>
-                Butuh bantuan teknis?{' '}
-                <span className="font-bold text-[#0a7c72]">Hubungi IT Support</span>
-              </div>
             </div>
           </section>
         </div>
