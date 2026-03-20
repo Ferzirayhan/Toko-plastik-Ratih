@@ -1,0 +1,1 @@
+GRANT EXECUTE ON FUNCTION get_profit_summary(TIMESTAMPTZ, TIMESTAMPTZ) TO authenticated;

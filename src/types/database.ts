@@ -190,8 +190,10 @@ export interface Database {
           product_id: number | null
           nama_produk: string
           harga_satuan: number
+          harga_beli: number
           qty: number
           subtotal: number
+          laba_kotor: number | null
         }
         Insert: {
           id?: number
@@ -199,8 +201,10 @@ export interface Database {
           product_id?: number | null
           nama_produk: string
           harga_satuan: number
+          harga_beli?: number
           qty: number
           subtotal: number
+          laba_kotor?: never
         }
         Update: {
           id?: number
@@ -208,8 +212,10 @@ export interface Database {
           product_id?: number | null
           nama_produk?: string
           harga_satuan?: number
+          harga_beli?: number
           qty?: number
           subtotal?: number
+          laba_kotor?: never
         }
         Relationships: []
       }
@@ -321,6 +327,7 @@ export interface Database {
           kasir_nama: string | null
           confirmed_by_nama: string | null
           jumlah_item: number | null
+          laba_kotor: number | null
         }
         Relationships: []
       }
@@ -356,6 +363,19 @@ export interface Database {
           transaction_id: number
           payment_status: PaymentStatus
         }
+      }
+      get_profit_summary: {
+        Args: {
+          p_date_from: string
+          p_date_to: string
+        }
+        Returns: {
+          tanggal: string
+          total_omzet: number
+          total_hpp: number
+          total_laba: number
+          jumlah_transaksi: number
+        }[]
       }
       cancel_pending_transaction: {
         Args: {

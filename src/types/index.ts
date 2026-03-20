@@ -75,6 +75,15 @@ export interface TopProduct {
   categoryNama?: string | null
 }
 
+export interface ProfitSummaryItem {
+  tanggal: string
+  totalOmzet: number
+  totalHpp: number
+  totalLaba: number
+  marginPersen: number
+  jumlahTransaksi: number
+}
+
 export interface AuthUserProfile {
   authUserId: string
   profile: Profile | null

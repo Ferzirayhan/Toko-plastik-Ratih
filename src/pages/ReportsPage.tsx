@@ -3,6 +3,7 @@ import { id as localeId } from 'date-fns/locale'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import {
+  getProfitSummary,
   getReportSummary,
   getSalesByCategory,
   getSalesByDateRange,
@@ -51,8 +52,14 @@ export function ReportsPage() {
     rataRataTransaksi: 0,
     produkTerlaris: null as null | { nama: string; totalQty: number },
     jumlahPending: 0,
+    totalHpp: 0,
+    totalLabaKotor: 0,
+    marginPersen: 0,
   })
   const [salesChart, setSalesChart] = useState<Array<{ tanggal: string; totalPenjualan: number; jumlahTransaksi: number }>>([])
+  const [profitChart, setProfitChart] = useState<
+    Array<{ tanggal: string; totalOmzet: number; totalHpp: number; totalLaba: number; marginPersen: number; jumlahTransaksi: number }>
+  >([])
   const [categoryChart, setCategoryChart] = useState<Array<{ category: string; total: number }>>([])
   const [transactions, setTransactions] = useState<TransactionWithKasir[]>([])
   const [totalCount, setTotalCount] = useState(0)
@@ -109,9 +116,10 @@ export function ReportsPage() {
     setLoading(true)
 
     try {
-      const [summaryResult, salesResult, categoryResult, transactionResult] = await Promise.all([
+      const [summaryResult, salesResult, profitResult, categoryResult, transactionResult] = await Promise.all([
         getReportSummary(dateFrom, dateTo),
         getSalesByDateRange(dateFrom, dateTo),
+        getProfitSummary(dateFrom, dateTo),
         getSalesByCategory(`${dateFrom}T00:00:00`, `${dateTo}T23:59:59`),
         getTransactionHistoryPage({
           page,
@@ -135,8 +143,12 @@ export function ReportsPage() {
             }
           : null,
         jumlahPending: summaryResult.jumlahPending,
+        totalHpp: summaryResult.totalHpp,
+        totalLabaKotor: summaryResult.totalLabaKotor,
+        marginPersen: summaryResult.marginPersen,
       })
       setSalesChart(salesResult)
+      setProfitChart(profitResult)
       setCategoryChart(categoryResult)
       setTransactions(transactionResult.data)
       setTotalCount(transactionResult.count)
@@ -401,6 +413,9 @@ export function ReportsPage() {
               { label: 'Jumlah Transaksi', value: summary.jumlahTransaksi },
               { label: 'Rata-rata Transaksi', value: <CurrencyDisplay value={summary.rataRataTransaksi} /> },
               { label: 'Pending Payment', value: summary.jumlahPending },
+              { label: 'Total HPP', value: <CurrencyDisplay value={summary.totalHpp} /> },
+              { label: 'Laba Kotor', value: <CurrencyDisplay value={summary.totalLabaKotor} /> },
+              { label: 'Margin', value: `${summary.marginPersen.toFixed(1)}%` },
             ].map((card) => (
               <div key={card.label} className="rounded-[18px] bg-white p-5 shadow-[0_6px_24px_rgba(15,23,42,0.04)]">
                 <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
@@ -487,6 +502,44 @@ export function ReportsPage() {
             </div>
           </section>
 
+          <section className="rounded-[20px] bg-white p-5 shadow-[0_6px_24px_rgba(15,23,42,0.04)]">
+            <h2 className="text-[18px] font-extrabold text-[#1b1e20]">Laba Kotor Harian</h2>
+            <div className="mt-5 h-[300px]">
+              {loading ? (
+                <Skeleton className="h-full w-full rounded-[16px]" />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={profitChart}>
+                    <CartesianGrid vertical={false} stroke="#eef1f1" />
+                    <XAxis
+                      dataKey="tanggal"
+                      tickFormatter={(value) => format(new Date(value), 'dd MMM', { locale: localeId })}
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: '#8b9895', fontSize: 12 }}
+                    />
+                    <YAxis
+                      tickFormatter={(value) => formatRupiah(Number(value)).replace('Rp', '').trim()}
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: '#8b9895', fontSize: 12 }}
+                    />
+                    <Tooltip
+                      formatter={(value, name) => [
+                        formatRupiah(Number(value)),
+                        name === 'totalLaba' ? 'Laba Kotor' : 'Omzet',
+                      ]}
+                      labelFormatter={(value) =>
+                        format(new Date(String(value)), 'EEEE, dd MMMM yyyy', { locale: localeId })}
+                    />
+                    <Bar dataKey="totalOmzet" name="totalOmzet" fill="#dff2ef" radius={[10, 10, 0, 0]} />
+                    <Bar dataKey="totalLaba" name="totalLaba" fill="#a86b00" radius={[10, 10, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </section>
+
           <section className="rounded-[20px] bg-white shadow-[0_6px_24px_rgba(15,23,42,0.04)]">
             <div className="border-b border-[#eef1f1] px-5 py-4">
               <h2 className="text-[18px] font-extrabold text-[#1b1e20]">Riwayat Transaksi</h2>
@@ -495,7 +548,7 @@ export function ReportsPage() {
               <table className="min-w-full">
                 <thead className="bg-[#f7f9f9]">
                   <tr>
-                    {['No. Nota', 'Kasir', 'Total', 'Metode', 'Status', 'Waktu', 'Aksi'].map((heading) => (
+                    {['No. Nota', 'Kasir', 'Total', 'Laba', 'Metode', 'Status', 'Waktu', 'Aksi'].map((heading) => (
                       <th key={heading} className="px-5 py-4 text-left text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#97a19f]">
                         {heading}
                       </th>
@@ -506,7 +559,7 @@ export function ReportsPage() {
                   {loading
                     ? Array.from({ length: 10 }).map((_, index) => (
                         <tr key={index} className="border-t border-[#eef1f1]">
-                          {Array.from({ length: 7 }).map((__, cellIndex) => (
+                          {Array.from({ length: 8 }).map((__, cellIndex) => (
                             <td key={cellIndex} className="px-5 py-4">
                               <Skeleton className="h-6 w-full rounded-xl" />
                             </td>
@@ -519,6 +572,9 @@ export function ReportsPage() {
                           <td className="px-5 py-4 text-sm text-[#52627d]">{transaction.kasir_nama ?? '-'}</td>
                           <td className="px-5 py-4 text-sm font-bold text-[#1b1e20]">
                             {formatRupiah(Number(transaction.total ?? 0))}
+                          </td>
+                          <td className="px-5 py-4 text-sm font-bold text-[#a86b00]">
+                            {formatRupiah(Number(transaction.laba_kotor ?? 0))}
                           </td>
                           <td className="px-5 py-4 text-sm capitalize text-[#52627d]">{transaction.metode_bayar ?? '-'}</td>
                           <td className="px-5 py-4">

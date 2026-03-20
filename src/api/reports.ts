@@ -12,6 +12,7 @@ import type {
   DashboardChangeSummary,
   DashboardNotification,
   DashboardStats,
+  ProfitSummaryItem,
   SalesReport,
   TopProduct,
 } from '../types'
@@ -334,6 +335,9 @@ export interface ReportSummary {
   rataRataTransaksi: number
   produkTerlaris: TopProduct | null
   jumlahPending: number
+  totalHpp: number
+  totalLabaKotor: number
+  marginPersen: number
 }
 
 export interface TransactionHistoryFilters {
@@ -400,9 +404,10 @@ export async function getReportSummary(
   dateFrom: string,
   dateTo: string,
 ): Promise<ReportSummary> {
-  const [sales, topProducts] = await Promise.all([
+  const [sales, topProducts, profitData] = await Promise.all([
     getSalesReport(`${dateFrom}T00:00:00`, `${dateTo}T23:59:59`),
     getTopProducts(`${dateFrom}T00:00:00`, `${dateTo}T23:59:59`, 1),
+    getProfitSummary(dateFrom, dateTo),
   ])
 
   const { count: pendingCount, error: pendingError } = await supabase
@@ -419,6 +424,9 @@ export async function getReportSummary(
 
   const totalPenjualan = sales.reduce((sum, item) => sum + item.totalPenjualan, 0)
   const jumlahTransaksi = sales.reduce((sum, item) => sum + item.jumlahTransaksi, 0)
+  const totalHpp = profitData.reduce((sum, item) => sum + item.totalHpp, 0)
+  const totalLabaKotor = profitData.reduce((sum, item) => sum + item.totalLaba, 0)
+  const marginPersen = totalPenjualan > 0 ? (totalLabaKotor / totalPenjualan) * 100 : 0
 
   return {
     totalPenjualan,
@@ -426,6 +434,9 @@ export async function getReportSummary(
     rataRataTransaksi: jumlahTransaksi > 0 ? totalPenjualan / jumlahTransaksi : 0,
     produkTerlaris: topProducts[0] ?? null,
     jumlahPending: pendingCount ?? 0,
+    totalHpp,
+    totalLabaKotor,
+    marginPersen,
   }
 }
 
@@ -475,4 +486,32 @@ export async function getTransactionHistoryPage(
     data: data ?? [],
     count: count ?? 0,
   }
+}
+
+export async function getProfitSummary(
+  dateFrom: string,
+  dateTo: string,
+): Promise<ProfitSummaryItem[]> {
+  const { data, error } = await supabase.rpc('get_profit_summary', {
+    p_date_from: `${dateFrom}T00:00:00+07:00`,
+    p_date_to: `${dateTo}T23:59:59+07:00`,
+  })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return (data ?? []).map((item) => {
+    const omzet = Number(item.total_omzet ?? 0)
+    const laba = Number(item.total_laba ?? 0)
+
+    return {
+      tanggal: item.tanggal,
+      totalOmzet: omzet,
+      totalHpp: Number(item.total_hpp ?? 0),
+      totalLaba: laba,
+      marginPersen: omzet > 0 ? (laba / omzet) * 100 : 0,
+      jumlahTransaksi: Number(item.jumlah_transaksi ?? 0),
+    }
+  })
 }
