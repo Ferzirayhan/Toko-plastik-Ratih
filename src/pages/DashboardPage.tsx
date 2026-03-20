@@ -364,7 +364,7 @@ export function DashboardPage() {
             <div className="hidden h-8 w-px bg-[#eef1f1] sm:block" />
             <div className="text-right">
               <p className="text-sm font-bold text-[#191c1e]">{user?.nama ?? 'Admin Toko'}</p>
-              <p className="text-[11px] font-medium text-[#8b9895]">Shift Pagi</p>
+              <p className="text-[11px] font-medium capitalize text-[#8b9895]">{user?.role ?? 'kasir'}</p>
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#0a7c72] text-white">
               <span className="material-symbols-outlined text-[20px]">account_circle</span>

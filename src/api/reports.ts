@@ -230,60 +230,22 @@ export async function getTopProducts(
   dateTo: string,
   limit = 10,
 ): Promise<TopProduct[]> {
-  const { data: transactions, error: transactionsError } = await supabase
-    .from('transactions')
-    .select('id')
-    .eq('status', 'selesai')
-    .eq('payment_status', 'dibayar')
-    .gte('created_at', dateFrom)
-    .lte('created_at', dateTo)
+  const { data, error } = await supabase.rpc('get_top_products', {
+    p_date_from: dateFrom,
+    p_date_to: dateTo,
+    p_limit: limit,
+  })
 
-  if (transactionsError) {
-    throw new Error(transactionsError.message)
+  if (error) {
+    throw new Error(error.message)
   }
 
-  const transactionIds = (transactions ?? []).map((item) => item.id)
-
-  if (transactionIds.length === 0) {
-    return []
-  }
-
-  const { data: items, error: itemsError } = await supabase
-    .from('transaction_items')
-    .select('*')
-    .in('transaction_id', transactionIds)
-
-  if (itemsError) {
-    throw new Error(itemsError.message)
-  }
-
-  const summaryMap = new Map<number, TopProduct>()
-
-  for (const item of items ?? []) {
-    if (!item.product_id) {
-      continue
-    }
-
-    const current = summaryMap.get(item.product_id)
-
-    if (current) {
-      current.totalQty += item.qty
-      current.totalPenjualan += Number(item.subtotal ?? 0)
-      summaryMap.set(item.product_id, current)
-      continue
-    }
-
-    summaryMap.set(item.product_id, {
-      productId: item.product_id,
-      nama: item.nama_produk,
-      totalQty: item.qty,
-      totalPenjualan: Number(item.subtotal ?? 0),
-    })
-  }
-
-  return [...summaryMap.values()]
-    .sort((a, b) => b.totalQty - a.totalQty)
-    .slice(0, limit)
+  return (data ?? []).map((item) => ({
+    productId: item.product_id as number,
+    nama: (item.nama_produk as string) ?? 'Produk',
+    totalQty: Number(item.total_qty ?? 0),
+    totalPenjualan: Number(item.total_penjualan ?? 0),
+  }))
 }
 
 export async function getSalesByCategory(dateFrom: string, dateTo: string) {
