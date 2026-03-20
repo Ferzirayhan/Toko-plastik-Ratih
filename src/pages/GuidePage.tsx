@@ -9,6 +9,16 @@ interface GuideSection {
   items: string[]
 }
 
+interface GuideFaqItem {
+  question: string
+  answer: string
+}
+
+interface GuideGlossaryItem {
+  term: string
+  meaning: string
+}
+
 interface GuideProfile {
   heroTitle: string
   heroDescription: string
@@ -16,6 +26,8 @@ interface GuideProfile {
   menuGuide: GuideSection[]
   workflowGuide: GuideSection[]
   safetyGuide: GuideSection[]
+  faqGuide: GuideFaqItem[]
+  glossaryGuide: GuideGlossaryItem[]
 }
 
 const kasirGuide: GuideProfile = {
@@ -110,6 +122,29 @@ const kasirGuide: GuideProfile = {
         'Kalau menemukan stok tidak cocok, laporkan ke admin, jangan disembunyikan.',
       ],
     },
+  ],
+  faqGuide: [
+    {
+      question: 'Kalau barang tidak ketemu saat discan bagaimana?',
+      answer:
+        'Cek dulu barcode dan nama barang. Kalau tetap tidak muncul, panggil admin karena kemungkinan barang belum didaftarkan atau sudah nonaktif.',
+    },
+    {
+      question: 'Kalau customer bayar QRIS tapi dana belum masuk bagaimana?',
+      answer:
+        'Simpan sebagai transaksi pending. Jangan anggap lunas dan jangan serahkan struk lunas sebelum pembayaran benar-benar terkonfirmasi.',
+    },
+    {
+      question: 'Kalau salah qty setelah transaksi disimpan bagaimana?',
+      answer:
+        'Gunakan alur pembatalan dengan alasan yang jelas, lalu buat transaksi baru yang benar. Jangan diamkan data yang salah.',
+    },
+  ],
+  glossaryGuide: [
+    { term: 'Pending payment', meaning: 'Transaksi sudah dicatat, tapi uangnya belum dikonfirmasi masuk.' },
+    { term: 'Audit', meaning: 'Catatan jejak aktivitas siapa melakukan apa dan kapan.' },
+    { term: 'Adjustment stok', meaning: 'Perubahan stok manual saat stok fisik dan stok sistem tidak sama.' },
+    { term: 'Cetak ulang struk', meaning: 'Mencetak kembali nota yang sudah pernah dibuat sebelumnya.' },
   ],
 }
 
@@ -232,6 +267,29 @@ const adminGuide: GuideProfile = {
       ],
     },
   ],
+  faqGuide: [
+    {
+      question: 'Kalau kasir bilang salah input, apa yang harus admin lakukan?',
+      answer:
+        'Minta kasir jelaskan kesalahannya, lihat transaksi di sistem, lalu arahkan pembatalan atau koreksi lewat alur resmi. Jangan perbaiki diam-diam tanpa jejak.',
+    },
+    {
+      question: 'Kalau stok fisik dan sistem beda, apa yang harus dilakukan?',
+      answer:
+        'Lakukan pengecekan barang, lihat histori stok dan audit, lalu buat penyesuaian stok dengan alasan yang spesifik.',
+    },
+    {
+      question: 'Kalau curiga ada transaksi palsu atau bohong, mulai dari mana?',
+      answer:
+        'Buka menu Audit, cocokkan dengan laporan transaksi, lihat pembatalan, perubahan harga, adjustment stok, dan cetak ulang struk yang tidak biasa.',
+    },
+  ],
+  glossaryGuide: [
+    { term: 'HPP', meaning: 'Harga pokok penjualan, yaitu total biaya barang yang terjual.' },
+    { term: 'Laba kotor', meaning: 'Selisih antara penjualan dan harga pokok barang yang terjual.' },
+    { term: 'Margin', meaning: 'Persentase keuntungan dibanding nilai penjualan.' },
+    { term: 'Riwayat harga', meaning: 'Catatan perubahan harga beli dan harga jual dari waktu ke waktu.' },
+  ],
 }
 
 function SectionCard({ section }: { section: GuideSection }) {
@@ -243,12 +301,39 @@ function SectionCard({ section }: { section: GuideSection }) {
       <h3 className="mt-2 text-[18px] font-extrabold text-[#1b1e20]">{section.title}</h3>
       <p className="mt-3 text-sm leading-7 text-[#52627d]">{section.intro}</p>
       <div className="mt-4 space-y-2">
-        {section.items.map((item) => (
-          <div key={item} className="rounded-[16px] bg-[#f8fbfb] px-4 py-3 text-sm leading-7 text-[#52627d]">
-            {item}
+        {section.items.map((item, index) => (
+          <div key={item} className="flex gap-3 rounded-[16px] bg-[#f8fbfb] px-4 py-3 text-sm leading-7 text-[#52627d]">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#e7f8f6] text-xs font-extrabold text-[#0a7c72]">
+              {index + 1}
+            </span>
+            <span>{item}</span>
           </div>
         ))}
       </div>
+    </article>
+  )
+}
+
+function FaqCard({ item }: { item: GuideFaqItem }) {
+  return (
+    <article className="rounded-[20px] bg-white p-5 shadow-[0_6px_24px_rgba(15,23,42,0.04)]">
+      <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
+        FAQ
+      </p>
+      <h3 className="mt-2 text-[18px] font-extrabold text-[#1b1e20]">{item.question}</h3>
+      <p className="mt-3 text-sm leading-7 text-[#52627d]">{item.answer}</p>
+    </article>
+  )
+}
+
+function GlossaryCard({ item }: { item: GuideGlossaryItem }) {
+  return (
+    <article className="rounded-[18px] bg-white p-5 shadow-[0_6px_24px_rgba(15,23,42,0.04)]">
+      <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
+        Istilah Sederhana
+      </p>
+      <h3 className="mt-2 text-[18px] font-extrabold text-[#1b1e20]">{item.term}</h3>
+      <p className="mt-3 text-sm leading-7 text-[#52627d]">{item.meaning}</p>
     </article>
   )
 }
@@ -349,6 +434,34 @@ export function GuidePage() {
             <div className="grid gap-4 xl:grid-cols-2">
               {guide.safetyGuide.map((section) => (
                 <SectionCard key={section.title} section={section} />
+              ))}
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <div>
+              <h2 className="text-[20px] font-extrabold text-[#1b1e20]">FAQ Cepat</h2>
+              <p className="mt-1 text-sm text-[#8b9895]">
+                Pertanyaan yang paling sering muncul saat aplikasi mulai dipakai sehari-hari.
+              </p>
+            </div>
+            <div className="grid gap-4 xl:grid-cols-3">
+              {guide.faqGuide.map((item) => (
+                <FaqCard key={item.question} item={item} />
+              ))}
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <div>
+              <h2 className="text-[20px] font-extrabold text-[#1b1e20]">Istilah Sederhana</h2>
+              <p className="mt-1 text-sm text-[#8b9895]">
+                Penjelasan singkat untuk istilah yang sering muncul di aplikasi supaya lebih mudah dipahami orang non-teknis.
+              </p>
+            </div>
+            <div className="grid gap-4 xl:grid-cols-2">
+              {guide.glossaryGuide.map((item) => (
+                <GlossaryCard key={item.term} item={item} />
               ))}
             </div>
           </section>
