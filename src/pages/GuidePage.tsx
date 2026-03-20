@@ -3,54 +3,266 @@ import { useAuthStore } from '../stores/authStore'
 import { useUIStore } from '../stores/uiStore'
 import { cn } from '../utils/cn'
 
-const kasirGuides = [
-  {
-    title: 'Mulai transaksi',
-    description: 'Cari produk, scan barcode, cek qty, lalu pilih metode pembayaran sebelum simpan.',
-  },
-  {
-    title: 'Kalau salah input',
-    description: 'Jangan ubah transaksi diam-diam. Untuk pending payment, batalkan dengan alasan yang jelas lalu buat ulang transaksi yang benar.',
-  },
-  {
-    title: 'Pembayaran non tunai',
-    description: 'Transfer dan QRIS harus menunggu konfirmasi dana masuk. Jangan cetak struk lunas sebelum pembayaran benar-benar diterima.',
-  },
-  {
-    title: 'Stok dan kejujuran',
-    description: 'Setiap transaksi, pembatalan, dan penyesuaian stok tercatat. Gunakan sistem apa adanya supaya admin bisa cocokkan stok dengan aktivitas kasir.',
-  },
-]
+interface GuideSection {
+  title: string
+  intro: string
+  items: string[]
+}
 
-const adminGuides = [
-  {
-    title: 'Pantau audit',
-    description: 'Buka halaman Audit Aktivitas untuk melihat siapa yang membuat transaksi, membatalkan, mengubah stok, atau memperbarui harga.',
-  },
-  {
-    title: 'Koreksi kesalahan kasir',
-    description: 'Kalau ada input salah, minta kasir batalkan transaksi dengan alasan lalu buat ulang. Hindari edit manual transaksi yang sudah tercatat.',
-  },
-  {
-    title: 'Kontrol stok',
-    description: 'Gunakan penyesuaian stok hanya saat perlu, sertakan alasan, dan cocokkan berkala dengan stok fisik di toko.',
-  },
-  {
-    title: 'Kontrol harga',
-    description: 'Perubahan harga beli dan jual sekarang punya riwayat. Gunakan ini untuk meninjau margin dan memeriksa perubahan yang tidak wajar.',
-  },
-]
+interface GuideProfile {
+  heroTitle: string
+  heroDescription: string
+  quickSummary: Array<{ label: string; value: string }>
+  menuGuide: GuideSection[]
+  workflowGuide: GuideSection[]
+  safetyGuide: GuideSection[]
+}
+
+const kasirGuide: GuideProfile = {
+  heroTitle: 'Panduan lengkap kasir untuk menjalankan POS dengan cepat, rapi, dan jujur.',
+  heroDescription:
+    'Halaman ini menjelaskan fungsi aplikasi dari sudut pandang kasir: cara memulai transaksi, menerima pembayaran, memperbaiki salah input, dan menjaga stok tetap sesuai dengan kondisi toko.',
+  quickSummary: [
+    { label: 'Fokus utama', value: 'Melayani transaksi dengan benar dan mencatat semua aktivitas lewat sistem.' },
+    { label: 'Menu utama', value: 'Kasir, Dashboard, dan Panduan.' },
+    { label: 'Prinsip kerja', value: 'Kalau salah input, koreksi lewat alur yang tersedia. Jangan transaksi di luar sistem.' },
+  ],
+  menuGuide: [
+    {
+      title: 'Menu Kasir',
+      intro: 'Ini adalah halaman kerja utama kasir setiap hari.',
+      items: [
+        'Cari produk lewat nama, SKU, atau barcode lalu masukkan ke keranjang.',
+        'Periksa jumlah item, diskon, PPN, dan total sebelum menekan proses pembayaran.',
+        'Untuk tunai, isi uang diterima agar sistem menghitung kembalian otomatis.',
+        'Untuk transfer atau QRIS, transaksi akan masuk ke status menunggu konfirmasi sebelum dianggap lunas.',
+      ],
+    },
+    {
+      title: 'Menu Dashboard',
+      intro: 'Dashboard membantu kasir melihat kondisi toko hari ini secara cepat.',
+      items: [
+        'Lihat jumlah transaksi hari ini dan penjualan hari ini.',
+        'Perhatikan notifikasi stok menipis agar bisa memberi tahu admin lebih cepat.',
+        'Gunakan daftar transaksi terbaru untuk memastikan transaksi yang baru dibuat sudah tercatat.',
+      ],
+    },
+    {
+      title: 'Menu Panduan',
+      intro: 'Panduan adalah buku petunjuk kerja kasir di dalam aplikasi.',
+      items: [
+        'Baca kembali alur transaksi jika kasir baru masih belajar.',
+        'Gunakan panduan ini saat bingung membedakan transaksi tunai dan non tunai.',
+        'Jadikan panduan ini standar kerja supaya semua kasir menjalankan proses yang sama.',
+      ],
+    },
+  ],
+  workflowGuide: [
+    {
+      title: 'Alur transaksi tunai',
+      intro: 'Ikuti urutan ini supaya pembayaran tunai langsung beres dalam satu langkah.',
+      items: [
+        'Masukkan semua produk yang dibeli customer ke keranjang.',
+        'Cek lagi qty tiap produk agar tidak ada yang dobel atau kurang scan.',
+        'Pilih metode bayar Tunai lalu isi nominal uang diterima.',
+        'Setelah total dan kembalian benar, proses pembayaran dan cetak struk.',
+      ],
+    },
+    {
+      title: 'Alur transaksi transfer atau QRIS',
+      intro: 'Transaksi non tunai tidak langsung dianggap lunas sampai dananya benar-benar masuk.',
+      items: [
+        'Masukkan produk ke keranjang seperti biasa.',
+        'Pilih metode bayar Transfer atau QRIS.',
+        'Simpan transaksi jika customer belum selesai bayar atau dana belum terkonfirmasi.',
+        'Tunggu konfirmasi dana masuk sebelum transaksi dicetak sebagai pembayaran selesai.',
+      ],
+    },
+    {
+      title: 'Kalau kasir salah input',
+      intro: 'Kesalahan input boleh diperbaiki, tapi harus lewat jalur yang jelas supaya admin bisa menelusuri.',
+      items: [
+        'Kalau belum disimpan, perbaiki langsung di keranjang.',
+        'Kalau transaksi pending sudah terlanjur dibuat, batalkan lewat tombol batal dan isi alasan pembatalan.',
+        'Setelah dibatalkan, buat ulang transaksi yang benar.',
+        'Jangan menghapus bukti atau membuat nota manual di luar sistem.',
+      ],
+    },
+  ],
+  safetyGuide: [
+    {
+      title: 'Aturan kejujuran kasir',
+      intro: 'Aplikasi ini memang dibuat supaya transaksi dan stok bisa ditelusuri oleh admin.',
+      items: [
+        'Setiap transaksi yang dibuat akan tercatat dengan user kasir dan waktu kejadian.',
+        'Pembatalan transaksi pending sekarang wajib memakai alasan.',
+        'Cetak ulang struk juga masuk log audit.',
+        'Perubahan stok dan koreksi penting bisa dibandingkan oleh admin dengan kondisi toko.',
+      ],
+    },
+    {
+      title: 'Hal yang tidak boleh dilakukan',
+      intro: 'Supaya data toko tetap bersih, kasir perlu menghindari beberapa kebiasaan ini.',
+      items: [
+        'Jangan menerima pembayaran tanpa membuat transaksi di aplikasi.',
+        'Jangan membuat nota palsu atau menulis transaksi di luar sistem lalu menganggapnya sah.',
+        'Jangan membatalkan transaksi tanpa alasan yang jujur dan jelas.',
+        'Kalau menemukan stok tidak cocok, laporkan ke admin, jangan disembunyikan.',
+      ],
+    },
+  ],
+}
+
+const adminGuide: GuideProfile = {
+  heroTitle: 'Panduan lengkap admin untuk mengelola toko, tim kasir, stok, dan laporan.',
+  heroDescription:
+    'Halaman ini menjelaskan fungsi aplikasi dari sudut pandang admin: mengatur master data, memantau kasir, melihat audit, memperbaiki kesalahan input, dan membaca laporan operasional toko.',
+  quickSummary: [
+    { label: 'Fokus utama', value: 'Menjaga data tetap akurat, stok cocok, dan semua aktivitas kasir bisa ditelusuri.' },
+    { label: 'Menu utama', value: 'Dashboard, Produk, Stok, Laporan, Audit, Pengaturan, dan Panduan.' },
+    { label: 'Prinsip kerja', value: 'Semua koreksi harus lewat sistem, bukan lewat catatan luar atau kesepakatan lisan saja.' },
+  ],
+  menuGuide: [
+    {
+      title: 'Menu Dashboard',
+      intro: 'Dashboard adalah tempat admin memantau kondisi toko secara cepat.',
+      items: [
+        'Lihat penjualan hari ini, jumlah transaksi, dan produk yang paling laku.',
+        'Pantau transaksi terbaru dan notifikasi stok menipis.',
+        'Gunakan dashboard untuk melihat apakah toko berjalan normal sebelum masuk ke halaman detail lain.',
+      ],
+    },
+    {
+      title: 'Menu Produk',
+      intro: 'Menu Produk dipakai untuk mengelola katalog barang yang dijual.',
+      items: [
+        'Tambah produk baru lengkap dengan SKU, barcode, kategori, harga beli, dan harga jual.',
+        'Edit produk aktif tanpa harus menghapus histori transaksi lama.',
+        'Lihat riwayat harga beli dan harga jual untuk mengetahui perubahan margin dari waktu ke waktu.',
+      ],
+    },
+    {
+      title: 'Menu Stok',
+      intro: 'Menu Stok dipakai untuk mengawasi jumlah stok aktual di sistem.',
+      items: [
+        'Cari produk yang stoknya habis atau menipis.',
+        'Lakukan penyesuaian stok dengan alasan yang jelas saat ada selisih fisik.',
+        'Gunakan histori stok untuk melihat siapa yang terakhir mengubah stok dan kapan perubahannya terjadi.',
+      ],
+    },
+    {
+      title: 'Menu Laporan',
+      intro: 'Laporan membantu admin membaca performa toko dan memeriksa transaksi.',
+      items: [
+        'Lihat total penjualan, jumlah transaksi, pending payment, HPP, laba kotor, dan margin.',
+        'Gunakan tabel riwayat transaksi untuk memeriksa nota satu per satu.',
+        'Export Excel untuk kebutuhan rekap luar atau pengecekan manual tambahan.',
+      ],
+    },
+    {
+      title: 'Menu Audit',
+      intro: 'Menu Audit adalah alat utama untuk memantau perilaku kasir dan perubahan penting di sistem.',
+      items: [
+        'Lihat transaksi dibuat, dibatalkan, pembayaran dikonfirmasi, stok diadjust, harga diubah, dan struk dicetak ulang.',
+        'Filter audit berdasarkan tanggal dan jenis aktivitas.',
+        'Gunakan halaman ini saat ada kecurigaan manipulasi stok, transaksi fiktif, atau pembatalan yang tidak wajar.',
+      ],
+    },
+    {
+      title: 'Menu Pengaturan',
+      intro: 'Pengaturan berisi konfigurasi toko dan akun operasional.',
+      items: [
+        'Atur identitas toko, footer/header struk, dan informasi pembayaran.',
+        'Kelola akun user admin dan kasir dari Supabase Auth serta tabel profiles.',
+        'Gunakan test print untuk mengecek printer sebelum toko dipakai operasional.',
+      ],
+    },
+  ],
+  workflowGuide: [
+    {
+      title: 'Alur harian admin',
+      intro: 'Ini alur yang paling aman untuk mengecek toko setiap hari.',
+      items: [
+        'Pagi hari: cek dashboard, produk stok menipis, dan apakah ada transaksi pending dari sebelumnya.',
+        'Saat operasional: pantau audit bila ada transaksi batal berulang atau adjustment stok mencurigakan.',
+        'Sore atau tutup toko: cocokkan transaksi, pending payment, dan stok produk penting dengan kondisi lapangan.',
+      ],
+    },
+    {
+      title: 'Kalau kasir salah input',
+      intro: 'Kesalahan input tidak perlu ditutup-tutupi, tapi harus dibenerkan dengan alur yang jelas.',
+      items: [
+        'Kalau transaksi belum final, minta kasir perbaiki sebelum diproses.',
+        'Kalau transaksi pending sudah salah, minta kasir batalkan dengan alasan lalu buat ulang.',
+        'Kalau stok fisik beda, lakukan adjustment stok dari menu stok dengan keterangan yang spesifik.',
+        'Jangan menyuruh kasir mengakali data supaya kelihatan cocok.',
+      ],
+    },
+    {
+      title: 'Kalau curiga ada kebohongan',
+      intro: 'Gunakan bukti sistem, bukan hanya ingatan atau cerita lisan.',
+      items: [
+        'Buka menu Audit dan cari transaksi dibatalkan, cetak ulang struk, serta perubahan harga atau stok yang tidak biasa.',
+        'Bandingkan audit dengan laporan transaksi dan histori stok.',
+        'Lihat user mana yang paling sering punya pembatalan atau koreksi.',
+        'Cocokkan hasil sistem dengan stok fisik dan uang masuk nyata.',
+      ],
+    },
+  ],
+  safetyGuide: [
+    {
+      title: 'Apa saja yang sekarang bisa ditrack',
+      intro: 'Semakin banyak proses dipaksa lewat sistem, semakin sulit data dimanipulasi.',
+      items: [
+        'Siapa yang membuat transaksi.',
+        'Siapa yang membatalkan transaksi dan apa alasannya.',
+        'Siapa yang mengubah harga beli atau harga jual.',
+        'Siapa yang melakukan penyesuaian stok.',
+        'Siapa yang mencetak ulang struk.',
+      ],
+    },
+    {
+      title: 'Batasan penting yang tetap perlu disiplin toko',
+      intro: 'Sistem membantu, tapi operasional toko tetap butuh aturan yang konsisten.',
+      items: [
+        'Semua transaksi harus masuk aplikasi. Kalau ada transaksi di luar sistem, audit tidak akan bisa menolong.',
+        'Stok fisik tetap perlu dicek berkala lewat stok opname sederhana.',
+        'Password akun admin dan kasir jangan dipakai bergantian.',
+        'Kalau ada aturan baru di toko, masukkan ke SOP dan samakan dengan alur di aplikasi.',
+      ],
+    },
+  ],
+}
+
+function SectionCard({ section }: { section: GuideSection }) {
+  return (
+    <article className="rounded-[20px] bg-white p-5 shadow-[0_6px_24px_rgba(15,23,42,0.04)]">
+      <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
+        Tutorial
+      </p>
+      <h3 className="mt-2 text-[18px] font-extrabold text-[#1b1e20]">{section.title}</h3>
+      <p className="mt-3 text-sm leading-7 text-[#52627d]">{section.intro}</p>
+      <div className="mt-4 space-y-2">
+        {section.items.map((item) => (
+          <div key={item} className="rounded-[16px] bg-[#f8fbfb] px-4 py-3 text-sm leading-7 text-[#52627d]">
+            {item}
+          </div>
+        ))}
+      </div>
+    </article>
+  )
+}
 
 export function GuidePage() {
   const sidebarCollapsed = useUIStore((state) => state.sidebarCollapsed)
   const user = useAuthStore((state) => state.user)
 
-  const guides = useMemo(() => {
+  const guide = useMemo(() => {
     if (user?.role === 'admin') {
-      return adminGuides
+      return adminGuide
     }
 
-    return kasirGuides
+    return kasirGuide
   }, [user?.role])
 
   return (
@@ -67,55 +279,77 @@ export function GuidePage() {
           </h1>
           <p className="mt-1 text-sm font-medium text-[#8b9895]">
             {user?.role === 'admin'
-              ? 'Panduan operasional admin untuk mengawasi transaksi, stok, dan tim kasir.'
-              : 'Panduan kasir untuk memakai aplikasi dengan rapi, cepat, dan aman.'}
+              ? 'Panduan operasional lengkap untuk admin toko.'
+              : 'Panduan operasional lengkap untuk kasir toko.'}
           </p>
         </header>
 
         <div className="space-y-6 bg-[#f7f9f9] px-4 py-4 sm:px-6 sm:py-6">
           <section className="rounded-[20px] bg-[linear-gradient(135deg,#0a7c72,#0f5d56)] p-6 text-white shadow-[0_14px_40px_rgba(10,124,114,0.20)]">
             <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-white/70">
-              Ringkasan
+              Penjelasan Aplikasi
             </p>
-            <h2 className="mt-2 text-[24px] font-extrabold tracking-[-0.03em]">
-              {user?.role === 'admin'
-                ? 'Semua aktivitas penting sekarang bisa ditelusuri lewat sistem.'
-                : 'Gunakan aplikasi ini apa adanya, karena transaksi dan perubahan penting tercatat otomatis.'}
+            <h2 className="mt-2 max-w-4xl text-[24px] font-extrabold tracking-[-0.03em]">
+              {guide.heroTitle}
             </h2>
-            <p className="mt-3 max-w-3xl text-sm font-medium leading-7 text-white/82">
-              {user?.role === 'admin'
-                ? 'Fokus utama admin adalah menjaga data tetap jujur: transaksi tidak dihapus diam-diam, stok tidak berubah tanpa jejak, dan harga punya histori.'
-                : 'Kalau ada salah input, pakai alur pembatalan atau koreksi yang tersedia. Hindari transaksi di luar sistem supaya stok dan laporan tetap cocok.'}
+            <p className="mt-3 max-w-4xl text-sm font-medium leading-7 text-white/82">
+              {guide.heroDescription}
             </p>
           </section>
 
-          <section className="grid gap-4 md:grid-cols-2">
-            {guides.map((item) => (
-              <article
-                key={item.title}
+          <section className="grid gap-4 md:grid-cols-3">
+            {guide.quickSummary.map((item) => (
+              <div
+                key={item.label}
                 className="rounded-[20px] bg-white p-5 shadow-[0_6px_24px_rgba(15,23,42,0.04)]"
               >
                 <p className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
-                  Tutorial
+                  {item.label}
                 </p>
-                <h3 className="mt-2 text-[18px] font-extrabold text-[#1b1e20]">{item.title}</h3>
-                <p className="mt-3 text-sm leading-7 text-[#52627d]">{item.description}</p>
-              </article>
+                <p className="mt-3 text-sm leading-7 text-[#52627d]">{item.value}</p>
+              </div>
             ))}
           </section>
 
-          <section className="rounded-[20px] bg-white p-5 shadow-[0_6px_24px_rgba(15,23,42,0.04)]">
-            <h2 className="text-[18px] font-extrabold text-[#1b1e20]">Aturan Aman</h2>
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              <div className="rounded-[16px] bg-[#f8fbfb] p-4 text-sm text-[#52627d]">
-                Jangan mengubah data di luar alur yang tersedia.
-              </div>
-              <div className="rounded-[16px] bg-[#f8fbfb] p-4 text-sm text-[#52627d]">
-                Selalu isi alasan saat ada pembatalan atau koreksi penting.
-              </div>
-              <div className="rounded-[16px] bg-[#f8fbfb] p-4 text-sm text-[#52627d]">
-                Gunakan laporan dan audit untuk mencocokkan aktivitas dengan kondisi toko nyata.
-              </div>
+          <section className="space-y-4">
+            <div>
+              <h2 className="text-[20px] font-extrabold text-[#1b1e20]">Fungsi Setiap Menu</h2>
+              <p className="mt-1 text-sm text-[#8b9895]">
+                Bagian ini menjelaskan fungsi halaman yang akan sering dipakai oleh {user?.role === 'admin' ? 'admin' : 'kasir'}.
+              </p>
+            </div>
+            <div className="grid gap-4 xl:grid-cols-2">
+              {guide.menuGuide.map((section) => (
+                <SectionCard key={section.title} section={section} />
+              ))}
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <div>
+              <h2 className="text-[20px] font-extrabold text-[#1b1e20]">Tutorial Alur Kerja</h2>
+              <p className="mt-1 text-sm text-[#8b9895]">
+                Ikuti langkah-langkah ini supaya operasional toko berjalan rapi dan data tetap sinkron.
+              </p>
+            </div>
+            <div className="grid gap-4 xl:grid-cols-2">
+              {guide.workflowGuide.map((section) => (
+                <SectionCard key={section.title} section={section} />
+              ))}
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <div>
+              <h2 className="text-[20px] font-extrabold text-[#1b1e20]">Aturan Aman dan Kontrol</h2>
+              <p className="mt-1 text-sm text-[#8b9895]">
+                Bagian ini penting supaya Ratih tahu apa yang memang bisa diawasi dari sistem dan apa yang tetap perlu disiplin operasional.
+              </p>
+            </div>
+            <div className="grid gap-4 xl:grid-cols-2">
+              {guide.safetyGuide.map((section) => (
+                <SectionCard key={section.title} section={section} />
+              ))}
             </div>
           </section>
         </div>
