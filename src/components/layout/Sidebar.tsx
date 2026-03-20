@@ -17,9 +17,11 @@ interface MenuItem {
 const menuItems: MenuItem[] = [
   { label: 'Kasir', path: '/pos', icon: 'point_of_sale' },
   { label: 'Dashboard', path: '/dashboard', icon: 'dashboard' },
+  { label: 'Panduan', path: '/panduan', icon: 'school' },
   { label: 'Produk', path: '/produk', icon: 'package_2', adminOnly: true },
   { label: 'Stok', path: '/stok', icon: 'inventory_2', adminOnly: true },
   { label: 'Laporan', path: '/laporan', icon: 'history', adminOnly: true },
+  { label: 'Audit', path: '/audit', icon: 'policy', adminOnly: true },
   { label: 'Pengaturan', path: '/pengaturan', icon: 'settings', adminOnly: true },
 ]
 

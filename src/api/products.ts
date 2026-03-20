@@ -347,3 +347,38 @@ export async function getProductStats() {
     inactiveProducts: products.filter((item) => item.is_active === false).length,
   }
 }
+
+export interface ProductPriceHistory {
+  id: number
+  product_id: number
+  harga_beli: number
+  harga_jual: number
+  changed_by: string | null
+  keterangan: string | null
+  created_at: string | null
+}
+
+export async function getProductPriceHistory(
+  productId: number,
+): Promise<ProductPriceHistory[]> {
+  const { data, error } = await supabase
+    .from('product_price_history')
+    .select('*')
+    .eq('product_id', productId)
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return (data ?? []).map((item) => ({
+    id: item.id,
+    product_id: item.product_id,
+    harga_beli: Number(item.harga_beli ?? 0),
+    harga_jual: Number(item.harga_jual ?? 0),
+    changed_by: item.changed_by ?? null,
+    keterangan: item.keterangan ?? null,
+    created_at: item.created_at ?? null,
+  }))
+}

@@ -106,6 +106,7 @@ export function POSPage() {
   const [confirmTarget, setConfirmTarget] = useState<TransactionWithKasir | null>(null)
   const [cancelTarget, setCancelTarget] = useState<TransactionWithKasir | null>(null)
   const [paymentReference, setPaymentReference] = useState('')
+  const [cancelReason, setCancelReason] = useState('')
   const [mobileSection, setMobileSection] = useState<'produk' | 'keranjang' | 'pending'>('produk')
 
   useEffect(() => {
@@ -390,10 +391,21 @@ export function POSPage() {
       return
     }
 
+    const trimmedReason = cancelReason.trim()
+
+    if (!trimmedReason) {
+      pushToast({
+        title: 'Alasan wajib diisi',
+        description: 'Tulis alasan pembatalan supaya admin bisa menelusuri koreksi kasir.',
+        variant: 'warning',
+      })
+      return
+    }
+
     setCancelingPayment(true)
 
     try {
-      await cancelPendingTransaction(cancelTarget.id, 'Dibatalkan dari kasir')
+      await cancelPendingTransaction(cancelTarget.id, `Dibatalkan dari kasir: ${trimmedReason}`)
       await Promise.all([loadPendingData(), loadCatalogData()])
       pushToast({
         title: 'Transaksi pending dibatalkan',
@@ -401,6 +413,7 @@ export function POSPage() {
         variant: 'success',
       })
       setCancelTarget(null)
+      setCancelReason('')
     } catch (error) {
       pushToast({
         title: 'Gagal membatalkan transaksi',
@@ -669,7 +682,10 @@ export function POSPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setCancelTarget(transaction)}
+                        onClick={() => {
+                          setCancelTarget(transaction)
+                          setCancelReason('')
+                        }}
                         className="rounded-[12px] bg-[#fff1eb] px-3 py-2 text-xs font-bold text-[#ba5a2b]"
                       >
                         Batalkan
@@ -1040,16 +1056,40 @@ export function POSPage() {
         onCancel={() => setShowClearConfirm(false)}
       />
 
-      <ConfirmDialog
+      <Modal
         open={Boolean(cancelTarget)}
+        onClose={() => {
+          setCancelTarget(null)
+          setCancelReason('')
+        }}
         title="Batalkan Transaksi Pending?"
-        description="Stok produk akan dikembalikan dan transaksi ditandai gagal."
-        confirmLabel={cancelingPayment ? 'Membatalkan...' : 'Ya, Batalkan'}
-        cancelLabel="Tutup"
-        variant="danger"
-        onConfirm={() => void handleCancelPending()}
-        onCancel={() => setCancelTarget(null)}
-      />
+        description="Stok produk akan dikembalikan dan alasan pembatalan akan tersimpan di catatan transaksi."
+        size="sm"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
+              Alasan Pembatalan
+            </label>
+            <textarea
+              rows={3}
+              value={cancelReason}
+              onChange={(event) => setCancelReason(event.target.value)}
+              placeholder="Contoh: customer salah nominal / scan produk dobel / transfer tidak jadi"
+              className="mt-2 w-full rounded-[14px] border-none bg-[#f1f3f5] px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => void handleCancelPending()}
+            disabled={cancelingPayment}
+            className="flex h-12 w-full items-center justify-center rounded-[14px] bg-[#ba5a2b] font-bold text-white disabled:opacity-60"
+          >
+            {cancelingPayment ? 'Membatalkan...' : 'Simpan Alasan dan Batalkan'}
+          </button>
+        </div>
+      </Modal>
     </main>
   )
 }

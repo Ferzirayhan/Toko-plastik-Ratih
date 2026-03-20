@@ -5,6 +5,8 @@ import { AuthProvider } from './components/auth/AuthProvider'
 import { PrivateRoute } from './components/auth/PrivateRoute'
 import { AppLayout } from './components/layout/AppLayout'
 import { DashboardPage } from './pages/DashboardPage'
+import { AuditPage } from './pages/AuditPage'
+import { GuidePage } from './pages/GuidePage'
 import { LoginPage } from './pages/LoginPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { POSPage } from './pages/POSPage'
@@ -30,6 +32,7 @@ function App() {
             >
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/pos" element={<POSPage />} />
+              <Route path="/panduan" element={<GuidePage />} />
               <Route
                 path="/produk"
                 element={
@@ -51,6 +54,14 @@ function App() {
                 element={
                   <AdminRoute>
                     <ReportsPage />
+                  </AdminRoute>
+                }
+              />
+              <Route
+                path="/audit"
+                element={
+                  <AdminRoute>
+                    <AuditPage />
                   </AdminRoute>
                 }
               />

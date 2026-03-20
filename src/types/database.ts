@@ -117,6 +117,69 @@ export interface Database {
         }
         Relationships: []
       }
+      product_price_history: {
+        Row: {
+          id: number
+          product_id: number
+          harga_beli: number
+          harga_jual: number
+          changed_by: string | null
+          keterangan: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: number
+          product_id: number
+          harga_beli: number
+          harga_jual: number
+          changed_by?: string | null
+          keterangan?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: number
+          product_id?: number
+          harga_beli?: number
+          harga_jual?: number
+          changed_by?: string | null
+          keterangan?: string | null
+          created_at?: string | null
+        }
+        Relationships: []
+      }
+      audit_logs: {
+        Row: {
+          id: number
+          user_id: string | null
+          entity_type: string
+          entity_id: string | null
+          action: string
+          description: string
+          metadata: Record<string, unknown> | null
+          created_at: string
+        }
+        Insert: {
+          id?: number
+          user_id?: string | null
+          entity_type: string
+          entity_id?: string | null
+          action: string
+          description: string
+          metadata?: Record<string, unknown> | null
+          created_at?: string
+        }
+        Update: {
+          id?: number
+          user_id?: string | null
+          entity_type?: string
+          entity_id?: string | null
+          action?: string
+          description?: string
+          metadata?: Record<string, unknown> | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       transactions: {
         Row: {
           id: number
@@ -328,6 +391,21 @@ export interface Database {
           confirmed_by_nama: string | null
           jumlah_item: number | null
           laba_kotor: number | null
+        }
+        Relationships: []
+      }
+      audit_logs_with_user: {
+        Row: {
+          id: number | null
+          user_id: string | null
+          entity_type: string | null
+          entity_id: string | null
+          action: string | null
+          description: string | null
+          metadata: Record<string, unknown> | null
+          created_at: string | null
+          actor_nama: string | null
+          actor_role: UserRole | null
         }
         Relationships: []
       }

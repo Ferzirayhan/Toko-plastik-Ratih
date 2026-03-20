@@ -1,3 +1,5 @@
+import { format } from 'date-fns'
+import { id as localeId } from 'date-fns/locale'
 import { zodResolver } from '@hookform/resolvers/zod'
 import JsBarcode from 'jsbarcode'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -11,12 +13,14 @@ import {
   deleteCategory,
   deleteProduct,
   getCategories,
+  getProductPriceHistory,
   getProductStats,
   getProductsPage,
   updateCategory,
   updateProduct,
   uploadProductPhoto,
 } from '../api/products'
+import type { ProductPriceHistory } from '../api/products'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { Modal } from '../components/ui/Modal'
 import { Skeleton } from '../components/ui/Skeleton'
@@ -87,6 +91,93 @@ function ProductBarcodePreview({ value, className }: { value: string; className?
   }, [value])
 
   return <svg ref={svgRef} className={className} />
+}
+
+function PriceHistorySection({ productId }: { productId: number }) {
+  const [open, setOpen] = useState(false)
+  const [history, setHistory] = useState<ProductPriceHistory[]>([])
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!open || !productId) {
+      return
+    }
+
+    let isMounted = true
+
+    const loadHistory = async () => {
+      setLoading(true)
+
+      try {
+        const result = await getProductPriceHistory(productId)
+        if (isMounted) {
+          setHistory(result)
+        }
+      } catch {
+        if (isMounted) {
+          setHistory([])
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false)
+        }
+      }
+    }
+
+    void loadHistory()
+
+    return () => {
+      isMounted = false
+    }
+  }, [open, productId])
+
+  return (
+    <div className="rounded-[14px] border border-[#eef1f1]">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center justify-between px-4 py-3 text-sm font-bold text-[#52627d]"
+      >
+        <span>Riwayat Harga Beli</span>
+        <span className="material-symbols-outlined text-[18px]">
+          {open ? 'expand_less' : 'expand_more'}
+        </span>
+      </button>
+
+      {open ? (
+        <div className="border-t border-[#eef1f1] px-4 pb-4 pt-3">
+          {loading ? (
+            <Skeleton className="h-20 rounded-[10px]" />
+          ) : history.length > 0 ? (
+            <div className="space-y-2">
+              {history.map((item) => (
+                <div key={item.id} className="flex items-center justify-between gap-3 text-sm">
+                  <div>
+                    <p className="font-bold text-[#1b1e20]">
+                      Beli: {formatRupiah(item.harga_beli)} {'->'} Jual: {formatRupiah(item.harga_jual)}
+                    </p>
+                    <p className="text-xs text-[#8b9895]">
+                      {item.created_at
+                        ? format(new Date(item.created_at), 'dd MMM yyyy, HH:mm', { locale: localeId })
+                        : '-'}
+                      {item.keterangan ? ` · ${item.keterangan}` : ''}
+                    </p>
+                  </div>
+                  <span className="text-right text-xs font-bold text-[#0a7c72]">
+                    {item.harga_beli > 0
+                      ? `Margin ${(((item.harga_jual - item.harga_beli) / item.harga_beli) * 100).toFixed(1)}%`
+                      : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-[#8b9895]">Belum ada riwayat perubahan harga.</p>
+          )}
+        </div>
+      ) : null}
+    </div>
+  )
 }
 
 interface ProductDrawerProps {
@@ -618,6 +709,10 @@ function ProductDrawer({
             <div className="rounded-[18px] border border-[#eef1f1] bg-[#fcfdfd] p-4">
               <ProductBarcodePreview className="mx-auto h-[80px] w-full max-w-[320px]" value={barcodeValue} />
             </div>
+
+            {initialProduct ? (
+              <PriceHistorySection productId={initialProduct.id ?? 0} />
+            ) : null}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
