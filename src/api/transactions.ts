@@ -57,14 +57,12 @@ async function waitForTransactionDetail(
   for (let attempt = 0; attempt < TRANSACTION_SYNC_RETRY_LIMIT; attempt += 1) {
     const detail = await getTransactionById(id)
 
-    if (!detail) {
-      throw new Error('Detail transaksi tidak ditemukan')
-    }
+    if (detail) {
+      lastDetail = detail
 
-    lastDetail = detail
-
-    if (predicate(detail)) {
-      return detail
+      if (predicate(detail)) {
+        return detail
+      }
     }
 
     await new Promise((resolve) => {
@@ -215,19 +213,16 @@ export async function createTransaction(
     throw new Error('Sistem belum mengembalikan transaksi yang valid')
   }
 
-  const detail = await getTransactionById(transactionId)
-
-  if (!detail) {
-    throw new Error('Detail transaksi yang baru dibuat tidak ditemukan')
-  }
-
-  return detail
+  return waitForTransactionDetail(transactionId, () => true)
 }
 
 export async function getPendingTransactions(): Promise<TransactionWithKasir[]> {
-  const today = new Date()
-  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString()
-  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString()
+  const now = new Date()
+  const offsetMs = 7 * 60 * 60 * 1000
+  const wibNow = new Date(now.getTime() + offsetMs)
+  const wibDateStr = wibNow.toISOString().slice(0, 10)
+  const start = new Date(`${wibDateStr}T00:00:00+07:00`).toISOString()
+  const end = new Date(`${wibDateStr}T23:59:59+07:00`).toISOString()
 
   const { data, error } = await supabase
     .from('transactions_with_kasir')
@@ -235,7 +230,7 @@ export async function getPendingTransactions(): Promise<TransactionWithKasir[]> 
     .eq('status', 'selesai')
     .eq('payment_status', 'menunggu_konfirmasi')
     .gte('created_at', start)
-    .lt('created_at', end)
+    .lte('created_at', end)
     .order('created_at', { ascending: false })
 
   if (error) {
@@ -286,73 +281,18 @@ export async function cancelPendingTransaction(
 }
 
 export async function cancelTransaction(id: number): Promise<Transaction> {
-  const detail = await getTransactionById(id)
-
-  if (!detail) {
-    throw new Error('Transaksi tidak ditemukan')
-  }
-
-  if (detail.transaction.status === 'batal') {
-    return detail.transaction
-  }
-
-  const currentUserId = await getCurrentProfileId()
-
-  for (const item of detail.items) {
-    if (!item.product_id) {
-      continue
-    }
-
-    const { data: product, error: productError } = await supabase
-      .from('products')
-      .select('*')
-      .eq('id', item.product_id)
-      .single()
-
-    if (productError) {
-      throw new Error(productError.message)
-    }
-
-    const stokSebelum = product.stok ?? 0
-    const stokSesudah = stokSebelum + item.qty
-
-    const { error: updateStockError } = await supabase
-      .from('products')
-      .update({ stok: stokSesudah })
-      .eq('id', item.product_id)
-
-    if (updateStockError) {
-      throw new Error(updateStockError.message)
-    }
-
-    const { error: adjustmentError } = await supabase
-      .from('stock_adjustments')
-      .insert({
-        product_id: item.product_id,
-        user_id: currentUserId,
-        jenis: 'masuk',
-        jumlah_sebelum: stokSebelum,
-        jumlah_perubahan: item.qty,
-        jumlah_sesudah: stokSesudah,
-        keterangan: `Pembatalan transaksi ${detail.transaction.nomor_nota}`,
-        reference_id: String(detail.transaction.id),
-      })
-
-    if (adjustmentError) {
-      throw new Error(adjustmentError.message)
-    }
-  }
-
-  const { data, error } = await supabase
-    .from('transactions')
-    .update({ status: 'batal' })
-    .eq('id', id)
-    .select('*')
-    .single()
+  const { error } = await supabase.rpc('cancel_transaction_atomic', {
+    p_transaction_id: id,
+  })
 
   if (error) {
     throw new Error(error.message)
   }
 
-  return data
+  const detail = await waitForTransactionDetail(
+    id,
+    (currentDetail) => currentDetail.transaction.status === 'batal',
+  )
+
+  return detail.transaction
 }

@@ -182,7 +182,7 @@ export function DashboardPage() {
 
     const intervalId = window.setInterval(() => {
       void loadDashboard(true)
-    }, 30_000)
+    }, 5 * 60 * 1000)
 
     const channel = supabase
       .channel('dashboard-live')
@@ -298,18 +298,7 @@ export function DashboardPage() {
       )}
     >
       <div className="min-h-screen bg-white md:rounded-l-[24px]">
-        <header className="hidden border-b border-[#eef1f1] px-4 py-4 sm:px-6 md:flex md:items-center md:justify-between">
-          <div className="relative w-full lg:max-w-[330px]">
-            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a19f]">
-              search
-            </span>
-            <input
-              type="text"
-              placeholder="Cari transaksi atau produk..."
-              className="h-11 w-full rounded-full border-none bg-[#f1f3f5] pl-12 pr-4 text-sm text-[#191c1e] outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
-            />
-          </div>
-
+        <header className="hidden border-b border-[#eef1f1] px-4 py-4 sm:px-6 md:flex md:justify-end">
           <div className="flex items-center justify-end gap-3 md:ml-6 md:gap-4">
             <div className="relative" ref={notificationRef}>
               <button
@@ -559,7 +548,7 @@ export function DashboardPage() {
                         {salesTrend.map((item, index) => (
                           <Cell
                             key={item.tanggal}
-                            fill={index === 2 ? '#0a7c72' : '#dff2ef'}
+                            fill={index === salesTrend.length - 1 ? '#0a7c72' : '#dff2ef'}
                           />
                         ))}
                       </Bar>

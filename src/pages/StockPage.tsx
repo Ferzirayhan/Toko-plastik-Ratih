@@ -4,7 +4,7 @@ import { id as localeId } from 'date-fns/locale'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
-import { deleteProduct, updateProduct } from '../api/products'
+import { archiveProduct, updateProduct } from '../api/products'
 import { adjustStock, getStockHistory, getStockList } from '../api/stock'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { Modal } from '../components/ui/Modal'
@@ -245,12 +245,12 @@ export function StockPage() {
     setDeleteSubmitting(true)
 
     try {
-      await deleteProduct(deleteTarget.id)
+      await archiveProduct(deleteTarget.id)
       await loadStock()
       setDeleteTarget(null)
       pushToast({
         title: 'Produk dinonaktifkan',
-        description: `${deleteTarget.nama ?? 'Produk'} sudah dihapus dari daftar stok aktif.`,
+        description: `${deleteTarget.nama ?? 'Produk'} berhasil diarsipkan dari daftar stok aktif.`,
         variant: 'success',
       })
     } catch (error) {
@@ -675,8 +675,8 @@ export function StockPage() {
       <ConfirmDialog
         open={Boolean(deleteTarget)}
         title="Hapus stok aktif?"
-        description={`${deleteTarget?.nama ?? 'Produk'} akan dinonaktifkan dari daftar stok aktif dan katalog kasir.`}
-        confirmLabel="Hapus"
+        description={`${deleteTarget?.nama ?? 'Produk'} akan diarsipkan dan disembunyikan dari katalog kasir. Data historis tetap tersimpan.`}
+        confirmLabel="Arsipkan"
         loading={deleteSubmitting}
         onCancel={() => setDeleteTarget(null)}
         onConfirm={() => void handleDeleteStockItem()}

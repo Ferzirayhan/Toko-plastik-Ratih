@@ -231,6 +231,7 @@ export function POSPage() {
           description: 'Produk dengan barcode tersebut belum ada di database.',
           variant: 'warning',
         })
+        setSearchQuery('')
         return
       }
 
@@ -247,6 +248,7 @@ export function POSPage() {
         description: error instanceof Error ? error.message : 'Produk barcode tidak tersedia.',
         variant: 'warning',
       })
+      setSearchQuery('')
     }
   }
 
@@ -264,9 +266,36 @@ export function POSPage() {
       return
     }
 
-    setProcessingPayment(true)
-
     try {
+      const freshProducts = await getProducts({ isActive: true })
+      const productMap = new Map(freshProducts.map((product) => [product.id, product]))
+
+      for (const item of items) {
+        const fresh = productMap.get(item.product_id)
+
+        if (!fresh) {
+          pushToast({
+            title: 'Produk tidak ditemukan',
+            description: `${item.nama_produk} sudah tidak aktif. Hapus dari keranjang sebelum melanjutkan.`,
+            variant: 'error',
+          })
+          return
+        }
+
+        const freshStok = Number(fresh.stok ?? 0)
+
+        if (item.qty > freshStok) {
+          pushToast({
+            title: 'Stok tidak cukup',
+            description: `Stok ${item.nama_produk} tersisa ${freshStok}, tapi di keranjang ada ${item.qty}.`,
+            variant: 'error',
+          })
+          return
+        }
+      }
+
+      setProcessingPayment(true)
+
       const result = await createTransaction({
         items: items.map((item) => ({
           productId: item.product_id,
@@ -500,7 +529,10 @@ export function POSPage() {
               </button>
 
               {categories.map((category) => {
-                const count = products.filter((product) => product.category_id === category.id).length
+                const count = products.filter(
+                  (product) =>
+                    product.category_id === category.id && Number(product.stok ?? 0) > 0,
+                ).length
 
                 return (
                   <button

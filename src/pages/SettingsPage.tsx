@@ -275,6 +275,50 @@ export function SettingsPage() {
 
   const selectedPpnEnabled = watchTax('ppn_enabled')
 
+  const handleTestPrint = () => {
+    const win = window.open('', '_blank', 'width=400,height=600')
+
+    if (!win) {
+      return
+    }
+
+    win.document.write(`
+      <html>
+        <head>
+          <title>Test Struk</title>
+          <style>
+            body {
+              font-family: monospace;
+              font-size: 13px;
+              padding: 20px;
+              text-align: center;
+            }
+
+            hr {
+              border: none;
+              border-top: 1px dashed #000;
+            }
+          </style>
+        </head>
+        <body>
+          <h2>${settings.nama_toko ?? 'Nama Toko'}</h2>
+          <p>${settings.alamat ?? 'Alamat toko'}</p>
+          <p>Tel: ${settings.no_telp ?? '-'}</p>
+          <hr/>
+          <p>${settings.header_struk ?? 'Header struk'}</p>
+          <hr/>
+          <p>TEST PRINT - ${new Date().toLocaleString('id-ID')}</p>
+          <p>Struk ini hanya untuk uji cetak.</p>
+          <hr/>
+          <p>${settings.footer_struk ?? 'Footer struk'}</p>
+        </body>
+      </html>
+    `)
+    win.document.close()
+    win.focus()
+    win.print()
+  }
+
   return (
     <main
       className={cn(
@@ -457,6 +501,7 @@ export function SettingsPage() {
                     </div>
                     <button
                       type="button"
+                      onClick={handleTestPrint}
                       className="mt-4 w-full rounded-[12px] border border-[#c8e2de] py-2 text-sm font-bold text-[#0a7c72]"
                     >
                       Test Print Struk

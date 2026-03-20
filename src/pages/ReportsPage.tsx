@@ -190,7 +190,7 @@ export function ReportsPage() {
       const XLSX = await import('xlsx')
       const allTransactions = await getTransactionHistoryPage({
         page: 1,
-        pageSize: Math.max(totalCount, 100),
+        pageSize: Math.min(totalCount, 5000),
         dateFrom,
         dateTo,
         metodeBayar,
@@ -219,6 +219,15 @@ export function ReportsPage() {
         description: 'File Excel laporan penjualan sudah dibuat.',
         variant: 'success',
       })
+
+      if (totalCount > 5000) {
+        pushToast({
+          title: 'Data dipotong',
+          description:
+            'Hanya 5.000 transaksi pertama yang diekspor. Gunakan filter tanggal untuk mempersempit data.',
+          variant: 'warning',
+        })
+      }
     } catch (error) {
       pushToast({
         title: 'Export gagal',
