@@ -12,16 +12,15 @@ interface ReceiptPrintProps {
 
 export const receiptPrintPageStyle = `
   @page {
+    margin: 0;
     size: 58mm auto;
-    margin: 4mm;
   }
-
   @media print {
     html, body {
+      margin: 0 !important;
+      padding: 0 !important;
       background: #ffffff;
-    }
-
-    body {
+      width: 58mm;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
@@ -61,110 +60,126 @@ export const ReceiptPrint = forwardRef<HTMLDivElement, ReceiptPrintProps>(
     return (
       <div
         ref={ref}
-        className="bg-white px-3 py-4 text-black"
-        style={{ width: '58mm', fontFamily: '"Courier New", monospace' }}
+        style={{
+          width: '56mm',
+          margin: '0 auto',
+          padding: '4mm',
+          background: 'white',
+          color: 'black',
+          fontFamily: "'Courier New', Courier, monospace",
+          fontSize: '12px',
+          lineHeight: '1.2',
+          boxSizing: 'border-box'
+        }}
       >
-        <div className="text-center text-[12px] font-bold uppercase tracking-[0.2em]">
+        <div style={{ textAlign: 'center', fontWeight: 'bold', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>
           {settings.nama_toko || 'Tara Plastic'}
         </div>
-        <div className="mt-1 text-center text-[10px] leading-tight whitespace-pre-line">
+        <div style={{ textAlign: 'center', fontSize: '11px', whiteSpace: 'pre-line', marginBottom: '8px' }}>
           {settings.header_struk || 'Tara Plastic'}
         </div>
-        <div className="my-3 border-t border-dashed border-black" />
-        <div className="space-y-1 text-[10px] leading-tight">
-          <div className="flex items-start justify-between gap-3">
-            <span>No</span>
-            <span className="text-right font-bold">{transaction.nomor_nota}</span>
-          </div>
-          <div className="flex items-start justify-between gap-3">
-            <span>Tanggal</span>
-            <span className="text-right">
-              {transaction.created_at ? formatDateTimeIndonesia(transaction.created_at) : '-'}
-            </span>
-          </div>
-          <div className="flex items-start justify-between gap-3">
-            <span>Kasir</span>
-            <span className="text-right">{cashier?.nama ?? '-'}</span>
-          </div>
-          <div className="flex items-start justify-between gap-3">
-            <span>Metode</span>
-            <span className="text-right">{getPaymentMethodLabel(transaction.metode_bayar)}</span>
-          </div>
-          <div className="flex items-start justify-between gap-3">
-            <span>Status</span>
-            <span className="text-right">{getPaymentStatusLabel(transaction.payment_status)}</span>
-          </div>
-          {transaction.paid_at ? (
-            <div className="flex items-start justify-between gap-3">
-              <span>Dibayar</span>
-              <span className="text-right">{formatDateTimeIndonesia(transaction.paid_at)}</span>
-            </div>
-          ) : null}
-          {transaction.payment_reference ? (
-            <div className="flex items-start justify-between gap-3">
-              <span>Ref</span>
-              <span className="max-w-[28mm] break-words text-right">
-                {transaction.payment_reference}
-              </span>
-            </div>
-          ) : null}
-        </div>
-        <div className="my-3 border-t border-dashed border-black" />
-        <div className="space-y-2 text-[10px] leading-tight">
+        
+        <hr style={{ borderTop: '1px dashed black', borderBottom: 'none', margin: '8px 0' }} />
+        
+        <table style={{ width: '100%', fontSize: '11px', borderCollapse: 'collapse', marginBottom: '8px' }}>
+          <tbody>
+            <tr>
+              <td style={{ verticalAlign: 'top', width: '35%' }}>No</td>
+              <td style={{ verticalAlign: 'top', textAlign: 'right', fontWeight: 'bold' }}>{transaction.nomor_nota}</td>
+            </tr>
+            <tr>
+              <td style={{ verticalAlign: 'top' }}>Tanggal</td>
+              <td style={{ verticalAlign: 'top', textAlign: 'right' }}>
+                {transaction.created_at ? formatDateTimeIndonesia(transaction.created_at) : '-'}
+              </td>
+            </tr>
+            <tr>
+              <td style={{ verticalAlign: 'top' }}>Kasir</td>
+              <td style={{ verticalAlign: 'top', textAlign: 'right' }}>{cashier?.nama ?? '-'}</td>
+            </tr>
+            <tr>
+              <td style={{ verticalAlign: 'top' }}>Metode</td>
+              <td style={{ verticalAlign: 'top', textAlign: 'right' }}>{getPaymentMethodLabel(transaction.metode_bayar)}</td>
+            </tr>
+            <tr>
+              <td style={{ verticalAlign: 'top' }}>Status</td>
+              <td style={{ verticalAlign: 'top', textAlign: 'right' }}>{getPaymentStatusLabel(transaction.payment_status)}</td>
+            </tr>
+            {transaction.payment_reference ? (
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>Ref</td>
+                <td style={{ verticalAlign: 'top', textAlign: 'right', wordBreak: 'break-all' }}>{transaction.payment_reference}</td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+
+        <hr style={{ borderTop: '1px dashed black', borderBottom: 'none', margin: '8px 0' }} />
+        
+        <div style={{ fontSize: '12px', marginBottom: '8px' }}>
           {items.map((item) => (
-            <div key={item.id} className="space-y-1">
-              <div className="break-words font-bold">{item.nama_produk}</div>
-              <div className="flex justify-between gap-3">
-                <span>
-                  {item.qty} x {formatRupiah(Number(item.harga_satuan))}
-                </span>
-                <span className="shrink-0">{formatRupiah(Number(item.subtotal))}</span>
+            <div key={item.id} style={{ marginBottom: '6px' }}>
+              <div style={{ fontWeight: 'bold', wordBreak: 'break-word', marginBottom: '2px' }}>{item.nama_produk}</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>{item.qty} x {formatRupiah(Number(item.harga_satuan))}</span>
+                <span>{formatRupiah(Number(item.subtotal))}</span>
               </div>
             </div>
           ))}
         </div>
-        <div className="my-3 border-t border-dashed border-black" />
-        <div className="space-y-1 text-[10px] leading-tight">
-          <div className="flex justify-between">
-            <span>Subtotal</span>
-            <span>{formatRupiah(Number(transaction.subtotal))}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Diskon</span>
-            <span>{formatRupiah(Number(transaction.diskon_amount ?? 0))}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>PPN</span>
-            <span>{formatRupiah(Number(transaction.ppn_amount ?? 0))}</span>
-          </div>
-          <div className="flex justify-between font-bold">
-            <span>Total</span>
-            <span>{formatRupiah(Number(transaction.total))}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>{isCash ? 'Bayar' : 'Tagihan'}</span>
-            <span>
-              {formatRupiah(
-                Number(isCash ? (transaction.uang_diterima ?? transaction.total ?? 0) : transaction.total),
-              )}
-            </span>
-          </div>
-          <div className="flex justify-between font-bold">
-            <span>{isCash ? 'Kembali' : 'Sisa'}</span>
-            <span>{formatRupiah(Number(isCash ? (transaction.kembalian ?? 0) : 0))}</span>
-          </div>
-        </div>
+
+        <hr style={{ borderTop: '1px dashed black', borderBottom: 'none', margin: '8px 0' }} />
+        
+        <table style={{ width: '100%', fontSize: '11px', borderCollapse: 'collapse' }}>
+          <tbody>
+            <tr>
+              <td>Subtotal</td>
+              <td style={{ textAlign: 'right' }}>{formatRupiah(Number(transaction.subtotal))}</td>
+            </tr>
+            {Number(transaction.diskon_amount) > 0 && (
+              <tr>
+                <td>Diskon</td>
+                <td style={{ textAlign: 'right' }}>{formatRupiah(Number(transaction.diskon_amount))}</td>
+              </tr>
+            )}
+            {Number(transaction.ppn_amount) > 0 && (
+              <tr>
+                <td>PPN</td>
+                <td style={{ textAlign: 'right' }}>{formatRupiah(Number(transaction.ppn_amount))}</td>
+              </tr>
+            )}
+            <tr>
+              <td style={{ fontWeight: 'bold', paddingTop: '4px', fontSize: '12px' }}>Total</td>
+              <td style={{ fontWeight: 'bold', textAlign: 'right', paddingTop: '4px', fontSize: '12px' }}>{formatRupiah(Number(transaction.total))}</td>
+            </tr>
+            <tr>
+              <td style={{ paddingTop: '4px' }}>{isCash ? 'Bayar' : 'Tagihan'}</td>
+              <td style={{ textAlign: 'right', paddingTop: '4px' }}>
+                {formatRupiah(Number(isCash ? (transaction.uang_diterima ?? transaction.total ?? 0) : transaction.total))}
+              </td>
+            </tr>
+            <tr>
+              <td style={{ fontWeight: 'bold' }}>{isCash ? 'Kembali' : 'Sisa'}</td>
+              <td style={{ fontWeight: 'bold', textAlign: 'right' }}>
+               {formatRupiah(Number(isCash ? (transaction.kembalian ?? 0) : 0))}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
         {transaction.catatan ? (
           <>
-            <div className="my-3 border-t border-dashed border-black" />
-            <div className="space-y-1 text-[10px] leading-tight">
-              <div className="font-bold">Catatan</div>
-              <div className="break-words whitespace-pre-line">{transaction.catatan}</div>
+            <hr style={{ borderTop: '1px dashed black', borderBottom: 'none', margin: '8px 0' }} />
+            <div style={{ fontSize: '11px' }}>
+              <div style={{ fontWeight: 'bold', marginBottom: '2px' }}>Catatan</div>
+              <div style={{ whiteSpace: 'pre-line', wordBreak: 'break-word' }}>{transaction.catatan}</div>
             </div>
           </>
         ) : null}
-        <div className="my-3 border-t border-dashed border-black" />
-        <div className="text-center text-[10px] leading-tight whitespace-pre-line">
+
+        <hr style={{ borderTop: '1px dashed black', borderBottom: 'none', margin: '8px 0' }} />
+        
+        <div style={{ textAlign: 'center', fontSize: '11px', whiteSpace: 'pre-line', marginTop: '4px' }}>
           {settings.footer_struk || 'Terima kasih telah berbelanja'}
         </div>
       </div>
