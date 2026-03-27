@@ -36,7 +36,7 @@ const productSchema = z.object({
   nama: z.string().trim().min(2, 'Nama produk minimal 2 karakter'),
   deskripsi: z.string().trim().optional(),
   category_id: z.coerce.number().min(1, 'Kategori wajib dipilih'),
-  satuan: z.enum(['pcs', 'lusin', 'kg', 'meter', 'pack']),
+  satuan: z.enum(['pcs', 'lusin', 'kg', 'meter', 'pack', 'gram', 'dus', 'ikat', 'bal', 'roll', 'batang', 'lembar']),
   harga_beli: z.coerce.number().min(0, 'Harga beli tidak boleh negatif'),
   harga_jual: z.coerce.number().min(1, 'Harga jual wajib diisi'),
   stok: z.coerce.number().int().min(0, 'Stok tidak boleh negatif'),
@@ -63,6 +63,13 @@ const satuanOptions: Array<{ value: SatuanType; label: string }> = [
   { value: 'kg', label: 'Kg' },
   { value: 'meter', label: 'Meter' },
   { value: 'pack', label: 'Pack' },
+  { value: 'gram', label: 'Gram' },
+  { value: 'dus', label: 'Dus' },
+  { value: 'ikat', label: 'Ikat' },
+  { value: 'bal', label: 'Bal' },
+  { value: 'roll', label: 'Roll' },
+  { value: 'batang', label: 'Batang' },
+  { value: 'lembar', label: 'Lembar' },
 ]
 
 function generateSkuSeed() {
