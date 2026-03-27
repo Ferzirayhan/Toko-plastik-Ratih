@@ -13,6 +13,7 @@ export interface CartItem {
   qty: number
   subtotal: number
   stok_tersedia: number
+  satuan: string
   foto_url?: string | null
 }
 

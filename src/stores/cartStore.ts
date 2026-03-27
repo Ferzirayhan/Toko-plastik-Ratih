@@ -41,6 +41,7 @@ function mapProductToCartItem(product: ProductWithCategory): CartItem {
     qty: 1,
     subtotal: Number(product.harga_jual ?? 0),
     stok_tersedia: Number(product.stok ?? 0),
+    satuan: product.satuan ?? 'pcs',
     foto_url: product.foto_url,
   }
 }

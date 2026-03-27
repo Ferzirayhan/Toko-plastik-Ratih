@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { archiveProduct, updateProduct } from '../api/products'
-import { adjustStock, getStockHistory, getStockList } from '../api/stock'
+import { adjustStock, getStockHistory, getStockList, repackStock } from '../api/stock'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { Modal } from '../components/ui/Modal'
 import { Skeleton } from '../components/ui/Skeleton'
@@ -16,7 +16,7 @@ import { cn } from '../utils/cn'
 
 const adjustmentSchema = z.object({
   jenis: z.enum(['masuk', 'keluar', 'koreksi']),
-  jumlah: z.coerce.number().int().min(0, 'Jumlah wajib diisi'),
+  jumlah: z.coerce.number().min(0, 'Jumlah wajib diisi'),
   keterangan: z.string().trim().optional(),
 })
 
@@ -24,10 +24,19 @@ type AdjustmentFormValues = z.infer<typeof adjustmentSchema>
 type AdjustmentFormInput = z.input<typeof adjustmentSchema>
 
 const stockEditSchema = z.object({
-  stok: z.coerce.number().int().min(0, 'Stok tidak boleh negatif'),
-  stok_minimum: z.coerce.number().int().min(0, 'Stok minimum tidak boleh negatif'),
+  stok: z.coerce.number().min(0, 'Stok tidak boleh negatif'),
+  stok_minimum: z.coerce.number().min(0, 'Stok minimum tidak boleh negatif'),
   is_active: z.boolean(),
 })
+
+const repackSchema = z.object({
+  targetProductId: z.coerce.number().min(1, 'Pilih produk tujuan'),
+  sourceQty: z.coerce.number().min(0.01, 'Kuantitas tidak boleh 0'),
+  targetQty: z.coerce.number().min(0.01, 'Kuantitas tidak boleh 0'),
+})
+
+type RepackFormValues = z.infer<typeof repackSchema>
+type RepackFormInput = z.input<typeof repackSchema>
 
 type StockEditValues = z.infer<typeof stockEditSchema>
 type StockEditInput = z.input<typeof stockEditSchema>
@@ -43,9 +52,11 @@ export function StockPage() {
   const [adjustmentOpen, setAdjustmentOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [repackOpen, setRepackOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [editSubmitting, setEditSubmitting] = useState(false)
   const [deleteSubmitting, setDeleteSubmitting] = useState(false)
+  const [repackSubmitting, setRepackSubmitting] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<ProductWithCategory | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ProductWithCategory | null>(null)
   const [history, setHistory] = useState<StockAdjustment[]>([])
@@ -76,6 +87,20 @@ export function StockPage() {
       stok: 0,
       stok_minimum: 0,
       is_active: true,
+    },
+  })
+
+  const {
+    register: registerRepack,
+    handleSubmit: handleSubmitRepack,
+    reset: resetRepack,
+    formState: { errors: repackErrors },
+  } = useForm<RepackFormInput, unknown, RepackFormValues>({
+    resolver: zodResolver(repackSchema),
+    defaultValues: {
+      targetProductId: 0,
+      sourceQty: 1,
+      targetQty: 1,
     },
   })
 
@@ -143,6 +168,16 @@ export function StockPage() {
       keterangan: '',
     })
     setAdjustmentOpen(true)
+  }
+
+  const openRepack = (product: ProductWithCategory) => {
+    setSelectedProduct(product)
+    resetRepack({
+      targetProductId: 0,
+      sourceQty: 1,
+      targetQty: 1,
+    })
+    setRepackOpen(true)
   }
 
   const openEdit = (product: ProductWithCategory) => {
@@ -234,6 +269,34 @@ export function StockPage() {
       })
     } finally {
       setEditSubmitting(false)
+    }
+  }
+
+  const onSubmitRepack = async (values: RepackFormValues) => {
+    if (!selectedProduct?.id) return
+    setRepackSubmitting(true)
+    try {
+      await repackStock(
+        selectedProduct.id,
+        values.targetProductId,
+        values.sourceQty,
+        values.targetQty,
+      )
+      await loadStock()
+      setRepackOpen(false)
+      pushToast({
+        title: 'Pecah stok berhasil',
+        description: 'Stok berhasil dikonversi.',
+        variant: 'success',
+      })
+    } catch (error) {
+      pushToast({
+        title: 'Gagal pecah stok',
+        description: error instanceof Error ? error.message : 'Terjadi kesalahan sistem',
+        variant: 'error',
+      })
+    } finally {
+      setRepackSubmitting(false)
     }
   }
 
@@ -401,6 +464,13 @@ export function StockPage() {
                               </button>
                               <button
                                 type="button"
+                                onClick={() => openRepack(product)}
+                                className="rounded-[12px] px-3 py-2 text-sm font-bold text-[#0a7c72] hover:bg-[#e7f8f6]"
+                              >
+                                Pecah
+                              </button>
+                              <button
+                                type="button"
                                 onClick={() => openEdit(product)}
                                 className="rounded-[12px] px-3 py-2 text-sm font-bold text-[#52627d] hover:bg-[#eef3f3]"
                               >
@@ -475,6 +545,13 @@ export function StockPage() {
                         className="rounded-[12px] bg-[#e7f8f6] px-3 py-2 text-xs font-bold text-[#0a7c72]"
                       >
                         Adjust
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openRepack(product)}
+                        className="rounded-[12px] bg-[#e7f8f6] px-3 py-2 text-xs font-bold text-[#0a7c72]"
+                      >
+                        Pecah
                       </button>
                       <button
                         type="button"
@@ -555,6 +632,84 @@ export function StockPage() {
               className="rounded-[12px] bg-[#0a7c72] px-5 py-2 font-bold text-white disabled:opacity-60"
             >
               {submitting ? 'Menyimpan...' : 'Simpan'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={repackOpen}
+        onClose={() => setRepackOpen(false)}
+        size="md"
+        title={`Pecah Stok: ${selectedProduct?.nama ?? ''}`}
+        description="Konversi produk ini menjadi produk lain (misal: 1 Dus Keju menjadi 12 Batang Keju)."
+      >
+        <form className="space-y-4" onSubmit={handleSubmitRepack(onSubmitRepack)}>
+          <div className="rounded-[16px] border border-[#eef1f1] bg-[#fbfdfd] p-4 text-sm">
+            <p className="font-bold text-[#52627d]">Sumber (Yang akan dikurangi)</p>
+            <p className="mt-1 text-[#1b1e20]">{selectedProduct?.nama}</p>
+            <p className="mt-1 font-bold text-[#0a7c72]">Stok tersedia: {selectedProduct?.stok} {selectedProduct?.satuan}</p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-[#52627d]">Kuantitas Sumber</label>
+            <div className="relative">
+              <input
+                type="number"
+                step="0.01"
+                min={0.01}
+                className="h-11 w-full rounded-[12px] border-none bg-[#f1f3f5] px-4 text-sm outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+                {...registerRepack('sourceQty')}
+              />
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-[#8b9895]">
+                {selectedProduct?.satuan}
+              </span>
+            </div>
+            {repackErrors.sourceQty ? <p className="text-sm text-[#ba1a1a]">{repackErrors.sourceQty.message}</p> : null}
+          </div>
+
+          <div className="mt-4 border-t border-[#eef1f1] pt-4">
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-[#52627d]">Produk Tujuan (Yang akan ditambah)</label>
+              <select
+                className="h-11 w-full rounded-[12px] border-none bg-[#f1f3f5] px-4 text-sm outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+                {...registerRepack('targetProductId')}
+              >
+                <option value={0}>-- Pilih Produk Tujuan --</option>
+                {products
+                  .filter((p) => p.id !== selectedProduct?.id)
+                  .map((p, index) => (
+                    <option key={p.id ?? `fallback-${index}`} value={p.id ?? 0}>
+                      {p.nama} (Stok: {p.stok} {p.satuan})
+                    </option>
+                  ))}
+              </select>
+              {repackErrors.targetProductId ? <p className="text-sm text-[#ba1a1a]">{repackErrors.targetProductId.message}</p> : null}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-[#52627d]">Kuantitas Tujuan</label>
+            <input
+              type="number"
+              step="0.01"
+              min={0.01}
+              className="h-11 w-full rounded-[12px] border-none bg-[#f1f3f5] px-4 text-sm outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+              {...registerRepack('targetQty')}
+            />
+            {repackErrors.targetQty ? <p className="text-sm text-[#ba1a1a]">{repackErrors.targetQty.message}</p> : null}
+          </div>
+
+          <div className="mt-6 flex justify-end gap-3">
+            <button type="button" onClick={() => setRepackOpen(false)} className="rounded-[12px] px-4 py-2 font-bold text-[#52627d]">
+              Batal
+            </button>
+            <button
+              type="submit"
+              disabled={repackSubmitting}
+              className="rounded-[12px] bg-[#0a7c72] px-5 py-2 font-bold text-white disabled:opacity-60"
+            >
+              {repackSubmitting ? 'Memproses...' : 'Proses Pecah Stok'}
             </button>
           </div>
         </form>

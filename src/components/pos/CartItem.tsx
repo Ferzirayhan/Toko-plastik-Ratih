@@ -6,9 +6,10 @@ interface CartItemProps {
   onDecrease: () => void
   onIncrease: () => void
   onRemove: () => void
+  onSetQty: (qty: number) => void
 }
 
-export function CartItem({ item, onDecrease, onIncrease, onRemove }: CartItemProps) {
+export function CartItem({ item, onDecrease, onIncrease, onRemove, onSetQty }: CartItemProps) {
   return (
     <div className="flex gap-3 rounded-[20px] border border-white/70 bg-white p-3.5 shadow-[0_6px_18px_rgba(15,23,42,0.04)]">
       {item.foto_url ? (
@@ -47,18 +48,29 @@ export function CartItem({ item, onDecrease, onIncrease, onRemove }: CartItemPro
             <button
               type="button"
               onClick={onDecrease}
-              className="flex h-9 w-9 items-center justify-center rounded-[12px] text-[#0a7c72] transition-colors hover:bg-white"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] text-[#0a7c72] transition-colors hover:bg-white"
             >
               <span className="material-symbols-outlined text-[18px]">remove</span>
             </button>
-            <span className="w-9 text-center text-sm font-extrabold text-[#1b1e20]">
-              {item.qty}
-            </span>
+            <input
+              type="number"
+              step="0.01"
+              min={0.01}
+              value={item.qty}
+              onChange={(e) => {
+                const val = parseFloat(e.target.value)
+                if (!isNaN(val) && val > 0) {
+                  onSetQty(val)
+                }
+              }}
+              className="w-14 bg-transparent text-center text-sm font-extrabold text-[#1b1e20] outline-none"
+            />
+            <span className="mr-1 text-[10px] font-bold text-[#8b9895] uppercase tracking-wider">{item.satuan}</span>
             <button
               type="button"
               onClick={onIncrease}
               disabled={item.qty >= item.stok_tersedia}
-              className="flex h-9 w-9 items-center justify-center rounded-[12px] text-[#0a7c72] transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] text-[#0a7c72] transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
             >
               <span className="material-symbols-outlined text-[18px]">add</span>
             </button>
@@ -66,6 +78,22 @@ export function CartItem({ item, onDecrease, onIncrease, onRemove }: CartItemPro
 
           <p className="text-sm font-extrabold text-[#1b1e20]">{formatRupiah(item.subtotal)}</p>
         </div>
+
+        {(item.satuan === 'kg' || item.satuan === 'liter' || item.satuan === 'pack') && (
+          <div className="mt-2 flex items-center gap-1.5">
+            {[0.25, 0.5, 0.75].map((fraction) => (
+              <button
+                key={fraction}
+                type="button"
+                onClick={() => onSetQty(fraction)}
+                className="rounded-lg bg-[#e7f8f6] px-2.5 py-1 text-[10px] font-extrabold tracking-wide text-[#0a7c72] transition-colors hover:bg-[#0a7c72] hover:text-white"
+                disabled={fraction > item.stok_tersedia}
+              >
+                {fraction}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

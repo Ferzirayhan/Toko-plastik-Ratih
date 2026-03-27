@@ -1,5 +1,5 @@
 export type UserRole = 'admin' | 'kasir'
-export type SatuanType = 'pcs' | 'lusin' | 'kg' | 'meter' | 'pack'
+export type SatuanType = 'pcs' | 'lusin' | 'kg' | 'meter' | 'pack' | 'gram' | 'dus' | 'ikat' | 'bal' | 'roll' | 'batang' | 'lembar'
 export type MetodeBayar = 'tunai' | 'transfer' | 'qris'
 export type StatusTransaksi = 'selesai' | 'batal'
 export type PaymentStatus = 'menunggu_konfirmasi' | 'dibayar' | 'gagal'
@@ -493,6 +493,42 @@ export interface Database {
           total_penjualan: number
           jumlah_transaksi: number
         }[]
+      }
+      get_top_products: {
+        Args: {
+          p_date_from: string
+          p_date_to: string
+          p_limit?: number
+        }
+        Returns: {
+          product_id: number
+          nama_produk: string
+          total_qty: number
+          total_penjualan: number
+        }[]
+      }
+      cancel_transaction_atomic: {
+        Args: {
+          p_transaction_id: number
+        }
+        Returns: {
+          transaction_id: number
+          status: string
+        }
+      }
+      repack_stock_atomic: {
+        Args: {
+          p_source_product_id: number
+          p_target_product_id: number
+          p_source_qty: number
+          p_target_qty: number
+          p_user_id?: string | null
+        }
+        Returns: {
+          success: boolean
+          source_stock: number
+          target_stock: number
+        }
       }
     }
     Enums: {

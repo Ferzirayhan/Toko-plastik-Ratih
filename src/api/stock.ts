@@ -117,3 +117,39 @@ export async function getStockHistory(
 
   return data ?? []
 }
+
+export interface RepackResult {
+  success: boolean
+  source_stock: number
+  target_stock: number
+}
+
+export async function repackStock(
+  sourceProductId: number,
+  targetProductId: number,
+  sourceQty: number,
+  targetQty: number,
+): Promise<RepackResult> {
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser()
+
+  if (authError) {
+    throw new Error(authError.message)
+  }
+
+  const { data, error } = await supabase.rpc('repack_stock_atomic', {
+    p_source_product_id: sourceProductId,
+    p_target_product_id: targetProductId,
+    p_source_qty: sourceQty,
+    p_target_qty: targetQty,
+    p_user_id: user?.id ?? null,
+  })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return data as unknown as RepackResult
+}

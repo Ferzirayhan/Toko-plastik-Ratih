@@ -1,0 +1,1 @@
+GRANT EXECUTE ON FUNCTION repack_stock_atomic(INTEGER, INTEGER, NUMERIC(12,3), NUMERIC(12,3), UUID) TO authenticated;

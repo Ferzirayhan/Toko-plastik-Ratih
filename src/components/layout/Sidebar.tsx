@@ -64,7 +64,7 @@ export function Sidebar() {
       ) : null}
       <aside
         className={cn(
-          'fixed left-0 top-0 z-50 flex h-screen flex-col border-r border-[#eef1f1] bg-white pb-5 pt-4 transition-all duration-200',
+          'fixed left-0 top-0 z-50 flex h-screen flex-col border-r border-[#eef1f1] bg-white pb-28 pt-4 transition-all duration-200 md:pb-5',
           'w-[min(76vw,288px)] rounded-r-[24px] px-4 shadow-[18px_0_40px_rgba(15,23,42,0.12)] md:w-[220px] md:rounded-r-none md:shadow-none md:translate-x-0',
           desktopCollapsed ? 'md:w-[56px] md:px-1.5' : 'md:w-[220px] md:px-4',
           mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',

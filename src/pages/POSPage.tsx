@@ -748,6 +748,18 @@ export function POSPage() {
                       })
                     }
                   }}
+                  onSetQty={(qty) => {
+                    try {
+                      updateQty(item.product_id, qty)
+                    } catch (error) {
+                      pushToast({
+                        title: 'Qty tidak valid',
+                        description:
+                          error instanceof Error ? error.message : 'Qty produk melebihi stok.',
+                        variant: 'warning',
+                      })
+                    }
+                  }}
                   onRemove={() => removeItem(item.product_id)}
                 />
               ))
