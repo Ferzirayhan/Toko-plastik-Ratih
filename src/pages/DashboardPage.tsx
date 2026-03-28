@@ -1,4 +1,4 @@
-import { format, parseISO } from 'date-fns'
+import { format, parseISO, startOfMonth, startOfWeek } from 'date-fns'
 import { id as localeId } from 'date-fns/locale'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -18,8 +18,9 @@ import {
   getDashboardNotifications,
   getDashboardStats,
   getLatestTransactions,
+  getReportSummary,
   getSalesByCategory,
-  getSalesTrend,
+  getSalesByDateRange,
 } from '../api/reports'
 import { CurrencyDisplay } from '../components/ui/CurrencyDisplay'
 import { Skeleton } from '../components/ui/Skeleton'
@@ -115,6 +116,11 @@ function formatTransactionTime(value: string | null) {
 export function DashboardPage() {
   const sidebarCollapsed = useUIStore((state) => state.sidebarCollapsed)
   const user = useAuthStore((state) => state.user)
+  const [dateFilter, setDateFilter] = useState<'hari_ini' | 'minggu_ini' | 'bulan_ini' | 'custom'>('hari_ini')
+  const [customDateRange, setCustomDateRange] = useState({
+    from: format(new Date(), 'yyyy-MM-dd'),
+    to: format(new Date(), 'yyyy-MM-dd'),
+  })
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [changes, setChanges] = useState<DashboardChangeSummary | null>(null)
   const [salesTrend, setSalesTrend] = useState<SalesReport[]>([])
@@ -136,8 +142,40 @@ export function DashboardPage() {
 
       try {
         const now = new Date()
-        const dateFrom = format(now, 'yyyy-MM-dd')
-        const dateTo = format(now, 'yyyy-MM-dd')
+        let dateFrom = format(now, 'yyyy-MM-dd')
+        let dateTo = format(now, 'yyyy-MM-dd')
+
+        if (dateFilter === 'minggu_ini') {
+          dateFrom = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd')
+        } else if (dateFilter === 'bulan_ini') {
+          dateFrom = format(startOfMonth(now), 'yyyy-MM-dd')
+        } else if (dateFilter === 'custom') {
+          dateFrom = customDateRange.from
+          dateTo = customDateRange.to
+        }
+
+        let statsPromise: Promise<DashboardStats>
+        let changesPromise: Promise<DashboardChangeSummary | null>
+
+        if (dateFilter === 'hari_ini') {
+          statsPromise = getDashboardStats()
+          changesPromise = getDashboardChangeSummary()
+        } else {
+          statsPromise = getReportSummary(dateFrom, dateTo).then((res) => ({
+            totalPenjualanHariIni: res.totalPenjualan,
+            jumlahTransaksiHariIni: res.jumlahTransaksi,
+            jumlahProdukStokMenipis: 0,
+            produkTerlarisHariIni: res.produkTerlaris
+              ? {
+                  productId: res.produkTerlaris.productId,
+                  nama: res.produkTerlaris.nama,
+                  qty: res.produkTerlaris.totalQty,
+                }
+              : null,
+          }))
+          changesPromise = Promise.resolve(null)
+        }
+
         const [
           statsResult,
           changesResult,
@@ -146,9 +184,9 @@ export function DashboardPage() {
           latestResult,
           notificationsResult,
         ] = await Promise.all([
-          getDashboardStats(),
-          getDashboardChangeSummary(),
-          getSalesTrend(7),
+          statsPromise,
+          changesPromise,
+          getSalesByDateRange(dateFrom, dateTo),
           getSalesByCategory(`${dateFrom}T00:00:00`, `${dateTo}T23:59:59`),
           getLatestTransactions(5),
           getDashboardNotifications(),
@@ -203,7 +241,7 @@ export function DashboardPage() {
       window.clearInterval(intervalId)
       void supabase.removeChannel(channel)
     }
-  }, [])
+  }, [dateFilter, customDateRange])
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -440,20 +478,76 @@ export function DashboardPage() {
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-1 rounded-[14px] bg-white p-1 shadow-[0_4px_14px_rgba(0,0,0,0.03)]">
-              <button className="rounded-[10px] bg-[#f4fffc] px-4 py-2 text-sm font-bold text-[#0a7c72]">
-                Hari Ini
-              </button>
-              <button className="rounded-[10px] px-4 py-2 text-sm font-semibold text-[#7d8987]">
-                Minggu Ini
-              </button>
-              <button className="rounded-[10px] px-4 py-2 text-sm font-semibold text-[#7d8987]">
-                Bulan Ini
-              </button>
-              <button className="flex items-center gap-2 rounded-[10px] px-4 py-2 text-sm font-semibold text-[#7d8987]">
-                <span>Custom</span>
-                <span className="material-symbols-outlined text-[16px]">calendar_today</span>
-              </button>
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex flex-wrap items-center gap-1 rounded-[14px] bg-white p-1 shadow-[0_4px_14px_rgba(0,0,0,0.03)]">
+                <button
+                  onClick={() => setDateFilter('hari_ini')}
+                  className={cn(
+                    'rounded-[10px] px-4 py-2 text-sm transition',
+                    dateFilter === 'hari_ini'
+                      ? 'bg-[#f4fffc] font-bold text-[#0a7c72]'
+                      : 'font-semibold text-[#7d8987] hover:bg-[#f8f9fb]',
+                  )}
+                >
+                  Hari Ini
+                </button>
+                <button
+                  onClick={() => setDateFilter('minggu_ini')}
+                  className={cn(
+                    'rounded-[10px] px-4 py-2 text-sm transition',
+                    dateFilter === 'minggu_ini'
+                      ? 'bg-[#f4fffc] font-bold text-[#0a7c72]'
+                      : 'font-semibold text-[#7d8987] hover:bg-[#f8f9fb]',
+                  )}
+                >
+                  Minggu Ini
+                </button>
+                <button
+                  onClick={() => setDateFilter('bulan_ini')}
+                  className={cn(
+                    'rounded-[10px] px-4 py-2 text-sm transition',
+                    dateFilter === 'bulan_ini'
+                      ? 'bg-[#f4fffc] font-bold text-[#0a7c72]'
+                      : 'font-semibold text-[#7d8987] hover:bg-[#f8f9fb]',
+                  )}
+                >
+                  Bulan Ini
+                </button>
+                <button
+                  onClick={() => setDateFilter('custom')}
+                  className={cn(
+                    'flex items-center gap-2 rounded-[10px] px-4 py-2 text-sm transition',
+                    dateFilter === 'custom'
+                      ? 'bg-[#f4fffc] font-bold text-[#0a7c72]'
+                      : 'font-semibold text-[#7d8987] hover:bg-[#f8f9fb]',
+                  )}
+                >
+                  <span>Custom</span>
+                  <span className="material-symbols-outlined text-[16px]">calendar_today</span>
+                </button>
+              </div>
+
+              {dateFilter === 'custom' && (
+                <div className="flex items-center gap-2 rounded-[14px] bg-white p-2 shadow-[0_4px_14px_rgba(0,0,0,0.03)]">
+                  <input
+                    type="date"
+                    value={customDateRange.from}
+                    onChange={(e) =>
+                      setCustomDateRange((prev) => ({ ...prev, from: e.target.value }))
+                    }
+                    className="rounded-[8px] border border-[#eef1f1] bg-[#f8f9fb] px-3 py-1.5 text-sm font-medium text-[#2e3132] outline-none focus:border-[#0a7c72] focus:bg-white"
+                  />
+                  <span className="text-sm font-medium text-[#7d8987]">s/d</span>
+                  <input
+                    type="date"
+                    value={customDateRange.to}
+                    onChange={(e) =>
+                      setCustomDateRange((prev) => ({ ...prev, to: e.target.value }))
+                    }
+                    className="rounded-[8px] border border-[#eef1f1] bg-[#f8f9fb] px-3 py-1.5 text-sm font-medium text-[#2e3132] outline-none focus:border-[#0a7c72] focus:bg-white"
+                  />
+                </div>
+              )}
             </div>
           </section>
 
@@ -694,8 +788,15 @@ export function DashboardPage() {
                           {item.kasir_nama ?? '-'}
                         </td>
                         <td className="px-5 py-4">
-                          <span className="rounded-full bg-[#ccfaf1] px-3 py-1 text-[10px] font-extrabold uppercase text-[#0a7c72]">
-                            Lunas
+                          <span
+                            className={cn(
+                              'rounded-full px-3 py-1 text-[10px] font-extrabold uppercase',
+                              item.payment_status === 'menunggu_konfirmasi'
+                                ? 'bg-[#fff8ef] text-[#ba5a2b]'
+                                : 'bg-[#ccfaf1] text-[#0a7c72]',
+                            )}
+                          >
+                            {item.payment_status === 'menunggu_konfirmasi' ? 'Menunggu' : 'Lunas'}
                           </span>
                         </td>
                       </tr>
@@ -734,8 +835,15 @@ export function DashboardPage() {
                           {item.kasir_nama ?? '-'} • {formatTransactionTime(item.created_at)}
                         </p>
                       </div>
-                      <span className="rounded-full bg-[#ccfaf1] px-3 py-1 text-[10px] font-extrabold uppercase text-[#0a7c72]">
-                        Lunas
+                      <span
+                        className={cn(
+                          'rounded-full px-3 py-1 text-[10px] font-extrabold uppercase',
+                          item.payment_status === 'menunggu_konfirmasi'
+                            ? 'bg-[#fff8ef] text-[#ba5a2b]'
+                            : 'bg-[#ccfaf1] text-[#0a7c72]',
+                        )}
+                      >
+                        {item.payment_status === 'menunggu_konfirmasi' ? 'Menunggu' : 'Lunas'}
                       </span>
                     </div>
 

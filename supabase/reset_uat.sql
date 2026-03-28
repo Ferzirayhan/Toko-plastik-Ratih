@@ -18,7 +18,8 @@ WHERE email NOT IN ('admin@ratih.com', 'kasir1@ratih.com');
 TRUNCATE TABLE
   public.transaction_items,
   public.stock_adjustments,
-  public.transactions
+  public.transactions,
+  public.audit_logs
 RESTART IDENTITY CASCADE;
 
 TRUNCATE TABLE

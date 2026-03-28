@@ -117,10 +117,9 @@ export async function getDashboardNotifications(): Promise<DashboardNotification
       .from('products_with_category')
       .select('id, nama, stok, stok_minimum, stok_status')
       .eq('is_active', true)
-      .in('stok_status', ['menipis', 'habis'])
       .order('stok', { ascending: true })
       .limit(5),
-    getLatestTransactions(3),
+    getLatestTransactions(3, 'dibayar'),
     supabase
       .from('transactions_with_kasir')
       .select('id, nomor_nota, total, payment_status, metode_bayar')
@@ -290,11 +289,17 @@ export async function getSalesByCategory(dateFrom: string, dateTo: string) {
   }))
 }
 
-export async function getLatestTransactions(limit = 5): Promise<TransactionWithKasir[]> {
-  const { data, error } = await supabase
+export async function getLatestTransactions(limit = 5, paymentStatus?: PaymentStatus): Promise<TransactionWithKasir[]> {
+  let query = supabase
     .from('transactions_with_kasir')
     .select('*')
-    .eq('payment_status', 'dibayar')
+    .eq('status', 'selesai')
+
+  if (paymentStatus) {
+    query = query.eq('payment_status', paymentStatus)
+  }
+
+  const { data, error } = await query
     .order('created_at', { ascending: false })
     .limit(limit)
 
