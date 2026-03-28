@@ -161,10 +161,13 @@ export function DashboardPage() {
           statsPromise = getDashboardStats()
           changesPromise = getDashboardChangeSummary()
         } else {
-          statsPromise = getReportSummary(dateFrom, dateTo).then((res) => ({
+          statsPromise = Promise.all([
+            getReportSummary(dateFrom, dateTo),
+            getDashboardStats()
+          ]).then(([res, currentStats]) => ({
             totalPenjualanHariIni: res.totalPenjualan,
             jumlahTransaksiHariIni: res.jumlahTransaksi,
-            jumlahProdukStokMenipis: 0,
+            jumlahProdukStokMenipis: currentStats.jumlahProdukStokMenipis,
             produkTerlarisHariIni: res.produkTerlaris
               ? {
                   productId: res.produkTerlaris.productId,

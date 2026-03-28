@@ -117,6 +117,7 @@ export async function getDashboardNotifications(): Promise<DashboardNotification
       .from('products_with_category')
       .select('id, nama, stok, stok_minimum, stok_status')
       .eq('is_active', true)
+      .in('stok_status', ['menipis', 'habis'])
       .order('stok', { ascending: true })
       .limit(5),
     getLatestTransactions(3, 'dibayar'),
