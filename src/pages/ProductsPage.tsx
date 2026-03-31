@@ -39,8 +39,8 @@ const productSchema = z.object({
   satuan: z.enum(['pcs', 'lusin', 'kg', 'meter', 'pack', 'gram', 'dus', 'ikat', 'bal', 'roll', 'batang', 'lembar']),
   harga_beli: z.coerce.number().min(0, 'Harga beli tidak boleh negatif'),
   harga_jual: z.coerce.number().min(1, 'Harga jual wajib diisi'),
-  stok: z.coerce.number().int().min(0, 'Stok tidak boleh negatif'),
-  stok_minimum: z.coerce.number().int().min(0, 'Stok minimum tidak boleh negatif'),
+  stok: z.coerce.number().min(0, 'Stok tidak boleh negatif'),
+  stok_minimum: z.coerce.number().min(0, 'Stok minimum tidak boleh negatif'),
   is_active: z.boolean(),
 })
 
@@ -238,6 +238,7 @@ function CategoryManager({ open, categories, onClose, onSaved }: CategoryManager
 
   const handleSaveCategory = async (values: CategoryFormValues) => {
     setSubmitting(true)
+    const wasEditing = Boolean(selectedCategory?.id)
 
     try {
       if (selectedCategory?.id) {
@@ -258,7 +259,7 @@ function CategoryManager({ open, categories, onClose, onSaved }: CategoryManager
       setSelectedCategory(null)
       reset({ nama: '', deskripsi: '', is_active: true })
       pushToast({
-        title: selectedCategory ? 'Kategori diperbarui' : 'Kategori ditambahkan',
+        title: wasEditing ? 'Kategori diperbarui' : 'Kategori ditambahkan',
         description: `${values.nama} berhasil disimpan.`,
         variant: 'success',
       })
@@ -548,7 +549,7 @@ function ProductDrawer({
 
     reset({
       sku: generateSkuSeed(),
-      barcode: generateSkuSeed(),
+      barcode: '',
       nama: '',
       deskripsi: '',
       category_id: categories[0]?.id ?? 0,
@@ -953,7 +954,7 @@ export function ProductsPage() {
   }
 
   const handlePrintBarcode = () => {
-    if (!barcodeProduct?.barcode) {
+    if (!barcodeProduct?.barcode && !barcodeProduct?.sku) {
       return
     }
 
@@ -1003,7 +1004,6 @@ export function ProductsPage() {
       setProducts((current) => current.filter((product) => product.id !== deletedId))
       setTotalCount((current) => Math.max(0, current - 1))
       setStatusFilter('active')
-      await loadProducts()
       setDeleteProductTarget(null)
       pushToast({
         title: 'Produk dihapus',
@@ -1035,7 +1035,6 @@ export function ProductsPage() {
       setProducts((current) => current.filter((product) => product.id !== archivedId))
       setTotalCount((current) => Math.max(0, current - 1))
       setStatusFilter('active')
-      await loadProducts()
       setArchiveProductTarget(null)
       pushToast({
         title: 'Produk diarsipkan',
