@@ -57,46 +57,26 @@ export async function adjustStock(
     throw new Error(authError.message)
   }
 
-  const { data: product, error: productError } = await supabase
-    .from('products')
-    .select('*')
-    .eq('id', productId)
-    .single()
-
-  if (productError) {
-    throw new Error(productError.message)
-  }
-
-  const stokSebelum = product.stok ?? 0
-  const jumlahPerubahan = jenis === 'keluar' ? -Math.abs(jumlah) : Math.abs(jumlah)
-  const stokSesudah =
-    jenis === 'koreksi' ? Math.max(0, jumlah) : Math.max(0, stokSebelum + jumlahPerubahan)
-
-  const { data: updatedProduct, error: updateError } = await supabase
-    .from('products')
-    .update({ stok: stokSesudah })
-    .eq('id', productId)
-    .select('*')
-    .single()
-
-  if (updateError) {
-    throw new Error(updateError.message)
-  }
-
-  const perubahanUntukLog = jenis === 'koreksi' ? stokSesudah - stokSebelum : jumlahPerubahan
-
-  const { error: logError } = await supabase.from('stock_adjustments').insert({
-    product_id: productId,
-    user_id: user?.id ?? null,
-    jenis,
-    jumlah_sebelum: stokSebelum,
-    jumlah_perubahan: perubahanUntukLog,
-    jumlah_sesudah: stokSesudah,
-    keterangan: keterangan ?? null,
+  const { error: rpcError } = await supabase.rpc('adjust_stock_atomic', {
+    p_product_id: productId,
+    p_jenis: jenis,
+    p_jumlah: jumlah,
+    p_keterangan: keterangan ?? null,
+    p_user_id: user?.id ?? null,
   })
 
-  if (logError) {
-    throw new Error(logError.message)
+  if (rpcError) {
+    throw new Error(rpcError.message)
+  }
+
+  const { data: updatedProduct, error: fetchError } = await supabase
+    .from('products')
+    .select('*')
+    .eq('id', productId)
+    .single()
+
+  if (fetchError) {
+    throw new Error(fetchError.message)
   }
 
   return updatedProduct

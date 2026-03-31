@@ -44,7 +44,8 @@ function getPreviewNomorNota() {
 
 function isBarcodeQuery(value: string) {
   const normalizedValue = value.trim()
-  return normalizedValue.length >= 8 && /^[a-zA-Z0-9-]+$/.test(normalizedValue)
+  // All-numeric (EAN/UPC scanner output) or PRD-XXXXXX internal SKU format
+  return /^\d{8,}$/.test(normalizedValue) || /^PRD-\d+$/i.test(normalizedValue)
 }
 
 function formatPendingTime(value: string | null) {

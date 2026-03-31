@@ -530,6 +530,20 @@ export interface Database {
           target_stock: number
         }
       }
+      adjust_stock_atomic: {
+        Args: {
+          p_product_id: number
+          p_jenis: string
+          p_jumlah: number
+          p_keterangan?: string | null
+          p_user_id?: string | null
+        }
+        Returns: {
+          stok_sebelum: number
+          stok_sesudah: number
+          jumlah_perubahan: number
+        }
+      }
     }
     Enums: {
       user_role: UserRole
