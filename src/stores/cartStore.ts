@@ -12,6 +12,11 @@ function getEffectiveDiscount(qty: number, tiers: DiscountTier[], diskonProduk: 
   return Math.max(getTierDiscount(qty, tiers), diskonProduk)
 }
 
+function roundSubtotal(value: number, hasDiscount: boolean): number {
+  if (!hasDiscount) return Math.round(value)
+  return Math.round(value / 500) * 500
+}
+
 interface CartStore extends CartState {
   ppn_persen: number
   addItem: (product: ProductWithCategory, tiers?: DiscountTier[]) => void
@@ -55,7 +60,7 @@ function mapProductToCartItem(
     nama_produk: product.nama ?? 'Produk',
     harga_satuan: harga,
     qty: 1,
-    subtotal: Math.round(harga * (1 - diskon / 100)),
+    subtotal: roundSubtotal(harga * (1 - diskon / 100), diskon > 0),
     stok_tersedia: Number(product.stok ?? 0),
     satuan: product.satuan ?? 'pcs',
     foto_url: product.foto_url,
@@ -119,7 +124,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
               ...item,
               qty: newQty,
               diskon_item_persen: newDiskon,
-              subtotal: Math.round(newQty * item.harga_satuan * (1 - newDiskon / 100)),
+              subtotal: roundSubtotal(newQty * item.harga_satuan * (1 - newDiskon / 100), newDiskon > 0),
             }
           : item,
       )
@@ -163,7 +168,7 @@ export const useCartStore = create<CartStore>((set, get) => ({
             ...item,
             qty,
             diskon_item_persen: newDiskon,
-            subtotal: Math.round(qty * item.harga_satuan * (1 - newDiskon / 100)),
+            subtotal: roundSubtotal(qty * item.harga_satuan * (1 - newDiskon / 100), newDiskon > 0),
           }
         : item,
     )

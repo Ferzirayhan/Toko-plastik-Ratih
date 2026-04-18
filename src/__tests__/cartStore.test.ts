@@ -9,6 +9,7 @@ function mockProduct(overrides: Partial<ProductWithCategory> = {}): ProductWithC
     harga_jual: 10000,
     harga_beli: 7000,
     diskon_produk_persen: null,
+    product_group_id: null,
     stok: 10,
     stok_minimum: 5,
     stok_status: 'aman',

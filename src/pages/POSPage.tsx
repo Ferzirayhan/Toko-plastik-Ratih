@@ -9,6 +9,7 @@ import {
 import {
   getActiveCategories,
   getAllProductDiscountTiersMap,
+  getAllProductVariantsMap,
   getProductByBarcode,
   getProducts,
 } from '../api/products'
@@ -91,6 +92,8 @@ export function POSPage() {
   const [filteredProducts, setFilteredProducts] = useState<ProductWithCategory[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [tiersMap, setTiersMap] = useState<Record<number, DiscountTierRow[]>>({})
+  const [variantsMap, setVariantsMap] = useState<Record<number, ProductWithCategory[]>>({})
+  const [unitPickerProduct, setUnitPickerProduct] = useState<ProductWithCategory | null>(null)
   const [pendingTransactions, setPendingTransactions] = useState<TransactionWithKasir[]>([])
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | 'all'>('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -131,17 +134,19 @@ export function POSPage() {
     setLoading(true)
 
     try {
-      const [productsResult, categoriesResult, settingsResult, tiersResult] = await Promise.all([
+      const [productsResult, categoriesResult, settingsResult, tiersResult, variantsResult] = await Promise.all([
         getProducts({ isActive: true }),
         getActiveCategories(),
         getSettings(),
         getAllProductDiscountTiersMap(),
+        getAllProductVariantsMap(),
       ])
 
       setProducts(productsResult)
       setCategories(categoriesResult)
       setSettings(settingsResult)
       setTiersMap(tiersResult)
+      setVariantsMap(variantsResult)
       setPpnPersen(Number(settingsResult.ppn_persen ?? 0))
     } catch (error) {
       pushToast({
@@ -180,7 +185,11 @@ export function POSPage() {
   }, [loadCatalogData, loadPendingData])
 
   useEffect(() => {
-    let activeProducts = products
+    // Only show root/standalone products (not variants) in the catalog
+    let activeProducts = products.filter((p) => {
+      const gid = p.product_group_id
+      return gid === null || gid === p.id
+    })
 
     if (selectedCategoryId !== 'all') {
       activeProducts = activeProducts.filter((product) => product.category_id === selectedCategoryId)
@@ -216,6 +225,25 @@ export function POSPage() {
     items.length === 0 || (metode_bayar === 'tunai' && uang_diterima < total)
 
   const handleAddProduct = (product: ProductWithCategory) => {
+    const variants = variantsMap[product.id ?? 0]
+    if (variants && variants.length > 0) {
+      setUnitPickerProduct(product)
+      return
+    }
+    try {
+      addItem(product, tiersMap[product.id ?? 0] ?? [])
+      setMobileSection('keranjang')
+    } catch (error) {
+      pushToast({
+        title: 'Tidak bisa menambah produk',
+        description: error instanceof Error ? error.message : 'Qty produk melebihi stok.',
+        variant: 'warning',
+      })
+    }
+  }
+
+  const handleSelectUnit = (product: ProductWithCategory) => {
+    setUnitPickerProduct(null)
     try {
       addItem(product, tiersMap[product.id ?? 0] ?? [])
       setMobileSection('keranjang')
@@ -612,7 +640,12 @@ export function POSPage() {
           ) : filteredProducts.length > 0 ? (
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
               {filteredProducts.map((product) => (
-                <ProductCard key={product.id} product={product} onAdd={handleAddProduct} />
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  onAdd={handleAddProduct}
+                  variantSatuans={(variantsMap[product.id ?? 0] ?? []).map((v) => v.satuan ?? '')}
+                />
               ))}
             </div>
           ) : (
@@ -1074,6 +1107,50 @@ export function POSPage() {
         }}
         onCancel={() => setShowClearConfirm(false)}
       />
+
+      <Modal
+        open={Boolean(unitPickerProduct)}
+        onClose={() => setUnitPickerProduct(null)}
+        title={`Pilih Satuan — ${unitPickerProduct?.nama ?? ''}`}
+        description="Pilih satuan yang ingin ditambahkan ke keranjang."
+        size="sm"
+      >
+        {unitPickerProduct && (
+          <div className="space-y-2">
+            <button
+              type="button"
+              disabled={Number(unitPickerProduct.stok ?? 0) <= 0}
+              onClick={() => handleSelectUnit(unitPickerProduct)}
+              className="flex w-full items-center justify-between rounded-[14px] bg-[#f7f9f9] px-4 py-3 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50 hover:bg-[#e7f8f6]"
+            >
+              <div>
+                <span className="font-extrabold text-[#1b1e20]">{unitPickerProduct.satuan}</span>
+                <span className="ml-2 text-xs text-[#8b9895]">Stok: {unitPickerProduct.stok ?? 0}</span>
+              </div>
+              <span className="font-extrabold text-[#0a7c72]">
+                {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(Number(unitPickerProduct.harga_jual ?? 0))}
+              </span>
+            </button>
+            {(variantsMap[unitPickerProduct.id ?? 0] ?? []).map((variant) => (
+              <button
+                key={variant.id}
+                type="button"
+                disabled={Number(variant.stok ?? 0) <= 0}
+                onClick={() => handleSelectUnit(variant)}
+                className="flex w-full items-center justify-between rounded-[14px] bg-[#f7f9f9] px-4 py-3 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50 hover:bg-[#e7f8f6]"
+              >
+                <div>
+                  <span className="font-extrabold text-[#1b1e20]">{variant.satuan}</span>
+                  <span className="ml-2 text-xs text-[#8b9895]">Stok: {variant.stok ?? 0}</span>
+                </div>
+                <span className="font-extrabold text-[#0a7c72]">
+                  {new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(Number(variant.harga_jual ?? 0))}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </Modal>
 
       <Modal
         open={Boolean(cancelTarget)}

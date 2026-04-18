@@ -11,20 +11,23 @@ import {
   bulkUpdateProductPrices,
   createCategory,
   createProduct,
+  createProductVariant,
   deleteCategory,
   deleteProduct,
+  deleteProductVariant,
   getCategories,
   getProductDiscountTiers,
   getProductPriceHistory,
   getProductStats,
   getProductsPage,
+  getProductVariants,
   saveProductDiscountTiers,
   updateCategory,
   updateProduct,
   uploadProductPhoto,
   getProducts,
 } from '../api/products'
-import type { DiscountTierRow, ProductPriceHistory } from '../api/products'
+import type { DiscountTierRow, ProductPriceHistory, ProductVariantInput } from '../api/products'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { Modal } from '../components/ui/Modal'
 import { Skeleton } from '../components/ui/Skeleton'
@@ -490,6 +493,230 @@ function CategoryManager({ open, categories, onClose, onSaved }: CategoryManager
         onConfirm={() => void handleDeleteCategory()}
       />
     </>
+  )
+}
+
+function VariantSection({
+  rootProduct,
+}: {
+  rootProduct: ProductWithCategory
+}) {
+  const pushToast = useToastStore((state) => state.pushToast)
+  const [open, setOpen] = useState(false)
+  const [variants, setVariants] = useState<ProductWithCategory[]>([])
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState<ProductVariantInput>({
+    satuan: 'pcs',
+    harga_beli: 0,
+    harga_jual: 0,
+    stok: 0,
+    stok_minimum: 0,
+    sku: null,
+    barcode: null,
+  })
+
+  useEffect(() => {
+    if (!open || !rootProduct.id) return
+    let mounted = true
+    setLoading(true)
+    getProductVariants(rootProduct.id)
+      .then((data) => { if (mounted) setVariants(data) })
+      .catch(() => { if (mounted) setVariants([]) })
+      .finally(() => { if (mounted) setLoading(false) })
+    return () => { mounted = false }
+  }, [open, rootProduct.id])
+
+  const handleAddVariant = async () => {
+    if (!form.harga_jual || !form.satuan) return
+    setSaving(true)
+    try {
+      await createProductVariant(rootProduct, form)
+      const updated = await getProductVariants(rootProduct.id ?? 0)
+      setVariants(updated)
+      setShowForm(false)
+      setForm({ satuan: 'pcs', harga_beli: 0, harga_jual: 0, stok: 0, stok_minimum: 0, sku: null, barcode: null })
+      pushToast({ title: 'Varian ditambahkan', description: `Varian ${form.satuan} berhasil dibuat.`, variant: 'success' })
+    } catch (err) {
+      pushToast({ title: 'Gagal tambah varian', description: err instanceof Error ? err.message : 'Terjadi kesalahan.', variant: 'error' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleRemoveVariant = async (variantId: number, satuan: string) => {
+    try {
+      await deleteProductVariant(variantId)
+      setVariants((prev) => prev.filter((v) => v.id !== variantId))
+      pushToast({ title: 'Varian dihapus', description: `Varian ${satuan} dinonaktifkan.`, variant: 'success' })
+    } catch (err) {
+      pushToast({ title: 'Gagal hapus varian', description: err instanceof Error ? err.message : 'Terjadi kesalahan.', variant: 'error' })
+    }
+  }
+
+  const hargaBeli = Number(rootProduct.harga_beli ?? 0)
+  const hargaJual = Number(rootProduct.harga_jual ?? 0)
+  const ratio = form.harga_beli > 0 && hargaBeli > 0 ? form.harga_beli / hargaBeli : null
+
+  return (
+    <div className="rounded-[18px] border border-[#eef1f1] bg-[#f9fbfb]">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between px-4 py-3 text-sm font-bold text-[#1b1e20]"
+      >
+        <div className="flex items-center gap-2">
+          <span className="material-symbols-outlined text-[18px] text-[#0a7c72]">layers</span>
+          Varian Unit
+          {variants.length > 0 && (
+            <span className="rounded-full bg-[#0a7c72] px-2 py-0.5 text-[10px] font-extrabold text-white">
+              {variants.length}
+            </span>
+          )}
+        </div>
+        <span className="material-symbols-outlined text-[18px] text-[#8b9895]">
+          {open ? 'expand_less' : 'expand_more'}
+        </span>
+      </button>
+
+      {open && (
+        <div className="border-t border-[#eef1f1] px-4 pb-4 pt-3 space-y-3">
+          <p className="text-xs text-[#8b9895]">
+            Buat varian satuan berbeda (pak, kg, lusin) dari produk ini. Varian berbagi nama &amp; kategori yang sama.
+          </p>
+
+          {loading ? (
+            <Skeleton className="h-12 rounded-[12px]" />
+          ) : (
+            <>
+              {variants.length > 0 && (
+                <div className="space-y-2">
+                  {variants.map((v) => (
+                    <div key={v.id} className="flex items-center justify-between rounded-[12px] bg-white px-3 py-2.5 text-sm">
+                      <div>
+                        <span className="font-bold text-[#1b1e20]">{v.satuan}</span>
+                        <span className="ml-2 text-xs text-[#8b9895]">
+                          Jual: {formatRupiah(Number(v.harga_jual ?? 0))}
+                          {Number(v.harga_beli ?? 0) > 0 && ` · Beli: ${formatRupiah(Number(v.harga_beli ?? 0))}`}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleRemoveVariant(v.id ?? 0, v.satuan ?? '')}
+                        className="rounded-full p-1 text-[#a0aaa7] hover:bg-[#fff1ed] hover:text-[#d63f2f]"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">close</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {showForm ? (
+                <div className="space-y-3 rounded-[14px] bg-white p-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#8b9895]">Satuan</label>
+                      <select
+                        value={form.satuan}
+                        onChange={(e) => setForm((f) => ({ ...f, satuan: e.target.value }))}
+                        className="h-10 w-full rounded-[12px] border-none bg-[#eef0f3] px-3 text-sm outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+                      >
+                        {satuanOptions.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#8b9895]">
+                        Harga Beli
+                        {ratio && (
+                          <span className="ml-1 text-[#0a7c72]">
+                            (×{ratio.toFixed(2)} dari induk)
+                          </span>
+                        )}
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={form.harga_beli || ''}
+                        placeholder={String(hargaBeli)}
+                        onChange={(e) => {
+                          const beli = Number(e.target.value)
+                          const suggestedJual = beli > 0 && hargaBeli > 0
+                            ? Math.round(beli / hargaBeli * hargaJual)
+                            : form.harga_jual
+                          setForm((f) => ({ ...f, harga_beli: beli, harga_jual: suggestedJual }))
+                        }}
+                        className="h-10 w-full rounded-[12px] border-none bg-[#eef0f3] px-3 text-sm outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#8b9895]">Harga Jual</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={form.harga_jual || ''}
+                        onChange={(e) => setForm((f) => ({ ...f, harga_jual: Number(e.target.value) }))}
+                        className="h-10 w-full rounded-[12px] border-none bg-[#eef0f3] px-3 text-sm outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#8b9895]">Stok Awal</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={form.stok || ''}
+                        onChange={(e) => setForm((f) => ({ ...f, stok: Number(e.target.value) }))}
+                        className="h-10 w-full rounded-[12px] border-none bg-[#eef0f3] px-3 text-sm outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#8b9895]">SKU (opsional)</label>
+                    <input
+                      type="text"
+                      value={form.sku ?? ''}
+                      onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value || null }))}
+                      className="h-10 w-full rounded-[12px] border-none bg-[#eef0f3] px-3 text-sm outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowForm(false)}
+                      className="flex-1 rounded-[12px] bg-[#eef0f3] py-2 text-sm font-bold text-[#52627d]"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="button"
+                      disabled={saving || !form.harga_jual}
+                      onClick={() => void handleAddVariant()}
+                      className="flex-1 rounded-[12px] bg-[#0a7c72] py-2 text-sm font-bold text-white disabled:opacity-60"
+                    >
+                      {saving ? 'Menyimpan...' : 'Simpan Varian'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowForm(true)}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-[12px] border border-dashed border-[#bdd4d0] py-2.5 text-sm font-bold text-[#0a7c72]"
+                >
+                  <span className="material-symbols-outlined text-[16px]">add</span>
+                  Tambah Varian Unit
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -993,6 +1220,10 @@ function ProductDrawer({
                 </div>
               )}
             </div>
+
+            {initialProduct ? (
+              <VariantSection rootProduct={initialProduct} />
+            ) : null}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
