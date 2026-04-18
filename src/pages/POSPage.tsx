@@ -8,9 +8,11 @@ import {
 } from '../api/transactions'
 import {
   getActiveCategories,
+  getAllProductDiscountTiersMap,
   getProductByBarcode,
   getProducts,
 } from '../api/products'
+import type { DiscountTierRow } from '../api/products'
 import { getSettings } from '../api/settings'
 import { CartItem } from '../components/pos/CartItem'
 import { ProductCard } from '../components/pos/ProductCard'
@@ -88,6 +90,7 @@ export function POSPage() {
   const [products, setProducts] = useState<ProductWithCategory[]>([])
   const [filteredProducts, setFilteredProducts] = useState<ProductWithCategory[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const [tiersMap, setTiersMap] = useState<Record<number, DiscountTierRow[]>>({})
   const [pendingTransactions, setPendingTransactions] = useState<TransactionWithKasir[]>([])
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | 'all'>('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -128,15 +131,17 @@ export function POSPage() {
     setLoading(true)
 
     try {
-      const [productsResult, categoriesResult, settingsResult] = await Promise.all([
+      const [productsResult, categoriesResult, settingsResult, tiersResult] = await Promise.all([
         getProducts({ isActive: true }),
         getActiveCategories(),
         getSettings(),
+        getAllProductDiscountTiersMap(),
       ])
 
       setProducts(productsResult)
       setCategories(categoriesResult)
       setSettings(settingsResult)
+      setTiersMap(tiersResult)
       setPpnPersen(Number(settingsResult.ppn_persen ?? 0))
     } catch (error) {
       pushToast({
@@ -212,7 +217,7 @@ export function POSPage() {
 
   const handleAddProduct = (product: ProductWithCategory) => {
     try {
-      addItem(product)
+      addItem(product, tiersMap[product.id ?? 0] ?? [])
       setMobileSection('keranjang')
     } catch (error) {
       pushToast({
@@ -237,7 +242,7 @@ export function POSPage() {
         return
       }
 
-      addItem(foundProduct)
+      addItem(foundProduct, tiersMap[foundProduct.id ?? 0] ?? [])
       setSearchQuery('')
       pushToast({
         title: 'Produk ditambahkan',
@@ -305,6 +310,7 @@ export function POSPage() {
           hargaSatuan: item.harga_satuan,
           qty: item.qty,
           subtotal: item.subtotal,
+          diskonItemPersen: item.diskon_item_persen,
         })),
         subtotal,
         diskonPersen: diskon_persen,

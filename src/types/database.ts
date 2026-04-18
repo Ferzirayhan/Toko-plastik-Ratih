@@ -74,6 +74,7 @@ export interface Database {
           satuan: SatuanType | null
           harga_beli: number | null
           harga_jual: number
+          diskon_produk_persen: number | null
           stok: number | null
           stok_minimum: number | null
           foto_url: string | null
@@ -91,6 +92,7 @@ export interface Database {
           satuan?: SatuanType | null
           harga_beli?: number | null
           harga_jual: number
+          diskon_produk_persen?: number | null
           stok?: number | null
           stok_minimum?: number | null
           foto_url?: string | null
@@ -108,12 +110,37 @@ export interface Database {
           satuan?: SatuanType | null
           harga_beli?: number | null
           harga_jual?: number
+          diskon_produk_persen?: number | null
           stok?: number | null
           stok_minimum?: number | null
           foto_url?: string | null
           is_active?: boolean | null
           created_at?: string | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      product_discount_tiers: {
+        Row: {
+          id: number
+          product_id: number
+          min_qty: number
+          diskon_persen: number
+          created_at: string | null
+        }
+        Insert: {
+          id?: number
+          product_id: number
+          min_qty: number
+          diskon_persen: number
+          created_at?: string | null
+        }
+        Update: {
+          id?: number
+          product_id?: number
+          min_qty?: number
+          diskon_persen?: number
+          created_at?: string | null
         }
         Relationships: []
       }
@@ -257,6 +284,7 @@ export interface Database {
           qty: number
           subtotal: number
           laba_kotor: number | null
+          diskon_item_persen: number | null
         }
         Insert: {
           id?: number
@@ -267,6 +295,7 @@ export interface Database {
           harga_beli?: number
           qty: number
           subtotal: number
+          diskon_item_persen?: number | null
           laba_kotor?: never
         }
         Update: {
@@ -278,6 +307,7 @@ export interface Database {
           harga_beli?: number
           qty?: number
           subtotal?: number
+          diskon_item_persen?: number | null
           laba_kotor?: never
         }
         Relationships: []
@@ -355,6 +385,7 @@ export interface Database {
           satuan: SatuanType | null
           harga_beli: number | null
           harga_jual: number | null
+          diskon_produk_persen: number | null
           stok: number | null
           stok_minimum: number | null
           foto_url: string | null
@@ -530,6 +561,14 @@ export interface Database {
           target_stock: number
         }
       }
+      bulk_update_product_prices: {
+        Args: {
+          p_updates: string
+          p_keterangan?: string | null
+          p_user_id?: string | null
+        }
+        Returns: number
+      }
       adjust_stock_atomic: {
         Args: {
           p_product_id: number
@@ -559,6 +598,7 @@ export interface Database {
   }
 }
 
+export type ProductDiscountTier = Database['public']['Tables']['product_discount_tiers']['Row']
 export type Profile = Database['public']['Tables']['profiles']['Row']
 export type Category = Database['public']['Tables']['categories']['Row']
 export type Product = Database['public']['Tables']['products']['Row']

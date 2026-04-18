@@ -358,6 +358,92 @@ export interface ProductPriceHistory {
   created_at: string | null
 }
 
+export interface DiscountTierRow {
+  min_qty: number
+  diskon_persen: number
+}
+
+export async function getProductDiscountTiers(productId: number): Promise<DiscountTierRow[]> {
+  const { data, error } = await supabase
+    .from('product_discount_tiers')
+    .select('min_qty, diskon_persen')
+    .eq('product_id', productId)
+    .order('min_qty', { ascending: true })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return (data ?? []).map((row) => ({
+    min_qty: Number(row.min_qty),
+    diskon_persen: Number(row.diskon_persen),
+  }))
+}
+
+export async function getAllProductDiscountTiersMap(): Promise<Record<number, DiscountTierRow[]>> {
+  const { data, error } = await supabase
+    .from('product_discount_tiers')
+    .select('product_id, min_qty, diskon_persen')
+    .order('min_qty', { ascending: true })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  const map: Record<number, DiscountTierRow[]> = {}
+  for (const row of data ?? []) {
+    const pid = Number(row.product_id)
+    if (!map[pid]) map[pid] = []
+    map[pid].push({ min_qty: Number(row.min_qty), diskon_persen: Number(row.diskon_persen) })
+  }
+  return map
+}
+
+export async function saveProductDiscountTiers(
+  productId: number,
+  tiers: DiscountTierRow[],
+): Promise<void> {
+  const { error: deleteError } = await supabase
+    .from('product_discount_tiers')
+    .delete()
+    .eq('product_id', productId)
+
+  if (deleteError) {
+    throw new Error(deleteError.message)
+  }
+
+  if (tiers.length === 0) return
+
+  const { error: insertError } = await supabase.from('product_discount_tiers').insert(
+    tiers.map((t) => ({
+      product_id: productId,
+      min_qty: t.min_qty,
+      diskon_persen: t.diskon_persen,
+    })),
+  )
+
+  if (insertError) {
+    throw new Error(insertError.message)
+  }
+}
+
+export async function bulkUpdateProductPrices(
+  updates: { product_id: number; harga_beli?: number; harga_jual: number }[],
+  keterangan?: string,
+): Promise<number> {
+  const { data, error } = await supabase.rpc('bulk_update_product_prices', {
+    p_updates: JSON.stringify(updates),
+    p_keterangan: keterangan ?? null,
+    p_user_id: null,
+  })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return Number(data ?? 0)
+}
+
 export async function getProductPriceHistory(
   productId: number,
 ): Promise<ProductPriceHistory[]> {

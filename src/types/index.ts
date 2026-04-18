@@ -5,6 +5,11 @@ import type {
   Profile,
 } from './database'
 
+export interface DiscountTier {
+  min_qty: number
+  diskon_persen: number
+}
+
 export interface CartItem {
   product_id: number
   sku: string | null
@@ -15,6 +20,9 @@ export interface CartItem {
   stok_tersedia: number
   satuan: string
   foto_url?: string | null
+  discount_tiers: DiscountTier[]
+  diskon_produk_persen: number
+  diskon_item_persen: number
 }
 
 export interface CartState {

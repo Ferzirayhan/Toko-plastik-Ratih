@@ -64,9 +64,25 @@ export function ProductCard({ product, onAdd }: ProductCardProps) {
         <p className="mt-1 line-clamp-1 text-[13px] font-medium text-[#8b9895]">
           {product.category_nama ?? 'Tanpa kategori'} • {product.satuan ?? 'pcs'}
         </p>
-        <p className="mt-2 text-[17px] font-extrabold tracking-[-0.02em] text-[#0a7c72]">
-          {formatRupiah(Number(product.harga_jual ?? 0))}
-        </p>
+        {(product.diskon_produk_persen ?? 0) > 0 ? (
+          <div className="mt-2 space-y-0.5">
+            <div className="flex items-center gap-1.5">
+              <span className="rounded-full bg-[#d63f2f] px-2 py-0.5 text-[10px] font-extrabold text-white">
+                -{product.diskon_produk_persen}%
+              </span>
+            </div>
+            <p className="text-[11px] font-medium text-[#a0aaa7] line-through">
+              {formatRupiah(Number(product.harga_jual ?? 0))}
+            </p>
+            <p className="text-[17px] font-extrabold tracking-[-0.02em] text-[#d63f2f]">
+              {formatRupiah(Math.round(Number(product.harga_jual ?? 0) * (1 - (product.diskon_produk_persen ?? 0) / 100)))}
+            </p>
+          </div>
+        ) : (
+          <p className="mt-2 text-[17px] font-extrabold tracking-[-0.02em] text-[#0a7c72]">
+            {formatRupiah(Number(product.harga_jual ?? 0))}
+          </p>
+        )}
       </div>
     </button>
   )

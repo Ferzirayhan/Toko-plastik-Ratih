@@ -8,19 +8,23 @@ import { z } from 'zod'
 import {
   archiveCategory,
   archiveProduct,
+  bulkUpdateProductPrices,
   createCategory,
   createProduct,
   deleteCategory,
   deleteProduct,
   getCategories,
+  getProductDiscountTiers,
   getProductPriceHistory,
   getProductStats,
   getProductsPage,
+  saveProductDiscountTiers,
   updateCategory,
   updateProduct,
   uploadProductPhoto,
+  getProducts,
 } from '../api/products'
-import type { ProductPriceHistory } from '../api/products'
+import type { DiscountTierRow, ProductPriceHistory } from '../api/products'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { Modal } from '../components/ui/Modal'
 import { Skeleton } from '../components/ui/Skeleton'
@@ -39,6 +43,7 @@ const productSchema = z.object({
   satuan: z.enum(['pcs', 'lusin', 'kg', 'meter', 'pack', 'gram', 'dus', 'ikat', 'bal', 'roll', 'batang', 'lembar']),
   harga_beli: z.coerce.number().min(0, 'Harga beli tidak boleh negatif'),
   harga_jual: z.coerce.number().min(1, 'Harga jual wajib diisi'),
+  diskon_produk_persen: z.coerce.number().min(0).max(99, 'Diskon maks 99%'),
   stok: z.coerce.number().min(0, 'Stok tidak boleh negatif'),
   stok_minimum: z.coerce.number().min(0, 'Stok minimum tidak boleh negatif'),
   is_active: z.boolean(),
@@ -500,11 +505,17 @@ function ProductDrawer({
   const [photoFile, setPhotoFile] = useState<File | null>(null)
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
 
+  const [discountTiers, setDiscountTiers] = useState<DiscountTierRow[]>([])
+  const [ongkosKirim, setOngkosKirim] = useState(0)
+  const [showHppCalc, setShowHppCalc] = useState(false)
+  const [tiersLoading, setTiersLoading] = useState(false)
+
   const {
     register,
     handleSubmit,
     reset,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<ProductFormInput, unknown, ProductFormValues>({
     resolver: zodResolver(productSchema),
@@ -517,6 +528,7 @@ function ProductDrawer({
       satuan: 'pcs',
       harga_beli: 0,
       harga_jual: 0,
+      diskon_produk_persen: 0,
       stok: 0,
       stok_minimum: 5,
       is_active: true,
@@ -525,7 +537,20 @@ function ProductDrawer({
 
   useEffect(() => {
     if (!open) {
+      setDiscountTiers([])
+      setOngkosKirim(0)
+      setShowHppCalc(false)
       return
+    }
+
+    if (initialProduct?.id) {
+      setTiersLoading(true)
+      getProductDiscountTiers(initialProduct.id)
+        .then(setDiscountTiers)
+        .catch(() => setDiscountTiers([]))
+        .finally(() => setTiersLoading(false))
+    } else {
+      setDiscountTiers([])
     }
 
     if (initialProduct) {
@@ -538,6 +563,7 @@ function ProductDrawer({
         satuan: initialProduct.satuan ?? 'pcs',
         harga_beli: Number(initialProduct.harga_beli ?? 0),
         harga_jual: Number(initialProduct.harga_jual ?? 0),
+        diskon_produk_persen: Number(initialProduct.diskon_produk_persen ?? 0),
         stok: Number(initialProduct.stok ?? 0),
         stok_minimum: Number(initialProduct.stok_minimum ?? 5),
         is_active: initialProduct.is_active ?? true,
@@ -556,6 +582,7 @@ function ProductDrawer({
       satuan: 'pcs',
       harga_beli: 0,
       harga_jual: 0,
+      diskon_produk_persen: 0,
       stok: 0,
       stok_minimum: 5,
       is_active: true,
@@ -578,7 +605,14 @@ function ProductDrawer({
   }, [photoFile])
 
   const barcodeValue = watch('barcode') || watch('sku') || 'PRD-RATIH'
+  const watchedHargaBeli = Number(watch('harga_beli') ?? 0)
   const hasCategories = categories.length > 0
+
+  const hppTotal = watchedHargaBeli + ongkosKirim
+  const marginScenarios = [10, 20, 30].map((margin) => ({
+    margin,
+    hargaJual: hppTotal > 0 ? Math.round(hppTotal / (1 - margin / 100)) : 0,
+  }))
 
   const onSubmit = async (values: ProductFormValues) => {
     setSubmitting(true)
@@ -599,18 +633,23 @@ function ProductDrawer({
         satuan: values.satuan,
         harga_beli: values.harga_beli,
         harga_jual: values.harga_jual,
+        diskon_produk_persen: values.diskon_produk_persen,
         stok: values.stok,
         stok_minimum: values.stok_minimum,
         foto_url: fotoUrl,
         is_active: values.is_active,
       }
 
+      let savedId: number
       if (initialProduct?.id) {
         await updateProduct(initialProduct.id, payload)
+        savedId = initialProduct.id
       } else {
-        await createProduct(payload)
+        const created = await createProduct(payload)
+        savedId = created.id
       }
 
+      await saveProductDiscountTiers(savedId, discountTiers)
       await onSaved()
       onClose()
       pushToast({
@@ -785,6 +824,176 @@ function ProductDrawer({
               </div>
             </div>
 
+            <div className="space-y-2">
+              <label className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
+                Diskon Produk (%)
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min={0}
+                  max={99}
+                  step={0.01}
+                  placeholder="0 = tidak ada diskon"
+                  className="h-12 w-full rounded-[14px] border-none bg-[#eef0f3] px-4 pr-12 text-sm outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+                  {...register('diskon_produk_persen')}
+                />
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-[#8b9895]">%</span>
+              </div>
+              {errors.diskon_produk_persen ? (
+                <p className="text-sm text-[#ba1a1a]">{errors.diskon_produk_persen.message}</p>
+              ) : (
+                <p className="text-xs text-[#8b9895]">
+                  Diskon tetap yang selalu berlaku untuk produk ini (promo/clearance).
+                </p>
+              )}
+            </div>
+
+            {/* HPP Calculator */}
+            <div className="rounded-[18px] border border-[#eef1f1] bg-[#f9fbfb]">
+              <button
+                type="button"
+                onClick={() => setShowHppCalc((v) => !v)}
+                className="flex w-full items-center justify-between px-4 py-3 text-sm font-bold text-[#1b1e20]"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[18px] text-[#0a7c72]">calculate</span>
+                  Kalkulator HPP
+                </div>
+                <span className="material-symbols-outlined text-[18px] text-[#8b9895]">
+                  {showHppCalc ? 'expand_less' : 'expand_more'}
+                </span>
+              </button>
+
+              {showHppCalc && (
+                <div className="border-t border-[#eef1f1] px-4 pb-4 pt-3 space-y-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-[#6d7a77]">Harga Beli</span>
+                    <span className="font-bold text-[#1b1e20]">
+                      {watchedHargaBeli > 0
+                        ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(watchedHargaBeli)
+                        : '—'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <label className="text-[#6d7a77]">Ongkos Kirim</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={ongkosKirim}
+                      onChange={(e) => setOngkosKirim(Number(e.target.value))}
+                      className="h-8 w-32 rounded-[10px] border-none bg-white px-3 text-right text-sm font-bold outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-sm border-t border-[#eef1f1] pt-2">
+                    <span className="font-bold text-[#1b1e20]">HPP</span>
+                    <span className="font-extrabold text-[#0a7c72]">
+                      {hppTotal > 0
+                        ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(hppTotal)
+                        : '—'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] font-extrabold uppercase tracking-[0.1em] text-[#8b9895]">
+                    Saran Harga Jual
+                  </p>
+                  <div className="space-y-2">
+                    {marginScenarios.map(({ margin, hargaJual }) => (
+                      <div key={margin} className="flex items-center justify-between rounded-[12px] bg-white px-3 py-2">
+                        <span className="text-xs font-bold text-[#6d7a77]">Margin {margin}%</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-extrabold text-[#1b1e20]">
+                            {hargaJual > 0
+                              ? new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(hargaJual)
+                              : '—'}
+                          </span>
+                          {hargaJual > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setValue('harga_jual', hargaJual)}
+                              className="rounded-[8px] bg-[#0a7c72] px-2 py-1 text-[10px] font-extrabold text-white"
+                            >
+                              Pakai
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Diskon Kuantitas */}
+            <div className="rounded-[18px] border border-[#eef1f1] bg-[#f9fbfb] px-4 py-4">
+              <div className="mb-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[18px] text-[#0a7c72]">local_offer</span>
+                  <span className="text-sm font-bold text-[#1b1e20]">Diskon Kuantitas</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDiscountTiers([...discountTiers, { min_qty: 0, diskon_persen: 0 }])}
+                  className="rounded-[10px] bg-[#e7f8f6] px-3 py-1.5 text-[11px] font-extrabold text-[#0a7c72]"
+                >
+                  + Tambah Tier
+                </button>
+              </div>
+
+              {tiersLoading ? (
+                <p className="text-xs text-[#8b9895]">Memuat...</p>
+              ) : discountTiers.length === 0 ? (
+                <p className="text-xs font-medium text-[#8b9895]">
+                  Belum ada tier. Klik "+ Tambah Tier" untuk buat diskon grosir.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-[1fr_1fr_auto] gap-2 text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#8b9895] px-1">
+                    <span>Min. Qty</span>
+                    <span>Diskon %</span>
+                    <span />
+                  </div>
+                  {discountTiers.map((tier, index) => (
+                    <div key={index} className="grid grid-cols-[1fr_1fr_auto] items-center gap-2">
+                      <input
+                        type="number"
+                        min={0.01}
+                        step={0.01}
+                        value={tier.min_qty || ''}
+                        placeholder="e.g. 12"
+                        onChange={(e) => {
+                          const updated = [...discountTiers]
+                          updated[index] = { ...updated[index], min_qty: Number(e.target.value) }
+                          setDiscountTiers(updated)
+                        }}
+                        className="h-10 w-full rounded-[12px] border-none bg-white px-3 text-sm font-bold outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+                      />
+                      <input
+                        type="number"
+                        min={0.01}
+                        max={100}
+                        step={0.01}
+                        value={tier.diskon_persen || ''}
+                        placeholder="e.g. 10"
+                        onChange={(e) => {
+                          const updated = [...discountTiers]
+                          updated[index] = { ...updated[index], diskon_persen: Number(e.target.value) }
+                          setDiscountTiers(updated)
+                        }}
+                        className="h-10 w-full rounded-[12px] border-none bg-white px-3 text-sm font-bold outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setDiscountTiers(discountTiers.filter((_, i) => i !== index))}
+                        className="rounded-full p-1.5 text-[#a0aaa7] hover:bg-[#fff1ed] hover:text-[#d63f2f]"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">close</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
@@ -878,6 +1087,16 @@ export function ProductsPage() {
   })
   const [allCategories, setAllCategories] = useState<Category[]>([])
 
+  // Bulk price update state
+  const [bulkPriceOpen, setBulkPriceOpen] = useState(false)
+  const [bulkCategoryId, setBulkCategoryId] = useState<number | 'all'>('all')
+  const [bulkJenis, setBulkJenis] = useState<'naik' | 'turun'>('naik')
+  const [bulkMode, setBulkMode] = useState<'persen' | 'nominal'>('persen')
+  const [bulkNilai, setBulkNilai] = useState(0)
+  const [bulkPreview, setBulkPreview] = useState<{ product_id: number; nama: string; harga_lama: number; harga_baru: number }[]>([])
+  const [bulkPreviewLoading, setBulkPreviewLoading] = useState(false)
+  const [bulkSubmitting, setBulkSubmitting] = useState(false)
+
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       setSearch(searchInput.trim())
@@ -930,6 +1149,67 @@ export function ProductsPage() {
   }, [loadProducts])
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+
+  const handleBulkPreview = async () => {
+    if (!bulkNilai || bulkNilai <= 0) return
+    setBulkPreviewLoading(true)
+    try {
+      const allProducts = await getProducts({
+        categoryId: bulkCategoryId === 'all' ? undefined : bulkCategoryId,
+        isActive: true,
+      })
+      const previews = allProducts.map((p) => {
+        const hargaLama = Number(p.harga_jual ?? 0)
+        let hargaBaru: number
+        if (bulkMode === 'persen') {
+          hargaBaru = bulkJenis === 'naik'
+            ? Math.round(hargaLama * (1 + bulkNilai / 100))
+            : Math.max(1, Math.round(hargaLama * (1 - bulkNilai / 100)))
+        } else {
+          hargaBaru = bulkJenis === 'naik'
+            ? hargaLama + bulkNilai
+            : Math.max(1, hargaLama - bulkNilai)
+        }
+        return { product_id: p.id ?? 0, nama: p.nama ?? '', harga_lama: hargaLama, harga_baru: hargaBaru }
+      })
+      setBulkPreview(previews)
+    } catch (error) {
+      pushToast({
+        title: 'Gagal memuat preview',
+        description: error instanceof Error ? error.message : 'Coba lagi.',
+        variant: 'error',
+      })
+    } finally {
+      setBulkPreviewLoading(false)
+    }
+  }
+
+  const handleBulkSubmit = async () => {
+    if (bulkPreview.length === 0) return
+    setBulkSubmitting(true)
+    try {
+      const updates = bulkPreview.map((p) => ({ product_id: p.product_id, harga_jual: p.harga_baru }))
+      const keterangan = `Update massal: ${bulkJenis} ${bulkNilai}${bulkMode === 'persen' ? '%' : ' nominal'}`
+      const count = await bulkUpdateProductPrices(updates, keterangan)
+      setBulkPriceOpen(false)
+      setBulkPreview([])
+      setBulkNilai(0)
+      await loadProducts()
+      pushToast({
+        title: 'Harga diperbarui',
+        description: `${count} produk berhasil diupdate.`,
+        variant: 'success',
+      })
+    } catch (error) {
+      pushToast({
+        title: 'Gagal update harga',
+        description: error instanceof Error ? error.message : 'Coba lagi.',
+        variant: 'error',
+      })
+    } finally {
+      setBulkSubmitting(false)
+    }
+  }
 
   const statCards = [
     { label: 'Total Produk', value: stats.totalProducts, color: 'border-[#0a7c72]' },
@@ -1082,6 +1362,15 @@ export function ProductsPage() {
             >
               <span className="material-symbols-outlined text-[18px]">category</span>
               Kelola Kategori
+            </button>
+
+            <button
+              type="button"
+              onClick={() => { setBulkPreview([]); setBulkNilai(0); setBulkPriceOpen(true) }}
+              className="flex items-center justify-center gap-2 rounded-[14px] bg-white px-5 py-3 font-bold text-[#855300] shadow-[0_8px_18px_rgba(15,23,42,0.06)]"
+            >
+              <span className="material-symbols-outlined text-[18px]">trending_up</span>
+              Update Harga Massal
             </button>
 
             <button
@@ -1522,6 +1811,145 @@ export function ProductsPage() {
         onCancel={() => setDeleteProductTarget(null)}
         onConfirm={() => void handleDeleteProduct()}
       />
+
+      {/* Bulk Price Update Modal */}
+      <Modal
+        open={bulkPriceOpen}
+        onClose={() => setBulkPriceOpen(false)}
+        size="lg"
+        title="Update Harga Massal"
+        description="Naikkan atau turunkan harga banyak produk sekaligus."
+      >
+        <div className="space-y-5">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
+                Kategori
+              </label>
+              <select
+                value={bulkCategoryId}
+                onChange={(e) => { setBulkCategoryId(e.target.value === 'all' ? 'all' : Number(e.target.value)); setBulkPreview([]) }}
+                className="h-11 w-full rounded-[12px] border-none bg-[#eef0f3] px-4 text-sm outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+              >
+                <option value="all">Semua Kategori</option>
+                {allCategories.filter((c) => c.is_active).map((c) => (
+                  <option key={c.id} value={c.id}>{c.nama}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
+                Jenis
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {(['naik', 'turun'] as const).map((j) => (
+                  <button
+                    key={j}
+                    type="button"
+                    onClick={() => { setBulkJenis(j); setBulkPreview([]) }}
+                    className={cn(
+                      'h-11 rounded-[12px] text-sm font-bold',
+                      bulkJenis === j
+                        ? j === 'naik' ? 'bg-[#0a7c72] text-white' : 'bg-[#d63f2f] text-white'
+                        : 'bg-[#eef0f3] text-[#52627d]',
+                    )}
+                  >
+                    {j === 'naik' ? '↑ Naik' : '↓ Turun'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
+                Mode
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {(['persen', 'nominal'] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => { setBulkMode(m); setBulkPreview([]) }}
+                    className={cn(
+                      'h-11 rounded-[12px] text-sm font-bold',
+                      bulkMode === m ? 'bg-[#0a7c72] text-white' : 'bg-[#eef0f3] text-[#52627d]',
+                    )}
+                  >
+                    {m === 'persen' ? 'Persentase (%)' : 'Nominal (Rp)'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[11px] font-extrabold uppercase tracking-[0.12em] text-[#8b9895]">
+                Nilai {bulkMode === 'persen' ? '(%)' : '(Rp)'}
+              </label>
+              <input
+                type="number"
+                min={0.01}
+                value={bulkNilai || ''}
+                placeholder={bulkMode === 'persen' ? 'e.g. 15' : 'e.g. 500'}
+                onChange={(e) => { setBulkNilai(Number(e.target.value)); setBulkPreview([]) }}
+                className="h-11 w-full rounded-[12px] border-none bg-[#eef0f3] px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-[#0a7c72]/15"
+              />
+            </div>
+          </div>
+
+          <button
+            type="button"
+            disabled={!bulkNilai || bulkNilai <= 0 || bulkPreviewLoading}
+            onClick={() => void handleBulkPreview()}
+            className="w-full rounded-[12px] bg-[#eef0f3] py-3 text-sm font-bold text-[#1b1e20] disabled:opacity-50"
+          >
+            {bulkPreviewLoading ? 'Memuat preview...' : 'Preview Perubahan'}
+          </button>
+
+          {bulkPreview.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-sm font-bold text-[#1b1e20]">
+                Preview ({bulkPreview.length} produk)
+              </p>
+              <div className="custom-scrollbar max-h-[240px] overflow-y-auto rounded-[14px] border border-[#eef1f1]">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-[#f7f9f9] text-[10px] font-extrabold uppercase tracking-[0.1em] text-[#8b9895]">
+                    <tr>
+                      <th className="px-4 py-2 text-left">Produk</th>
+                      <th className="px-4 py-2 text-right">Harga Lama</th>
+                      <th className="px-4 py-2 text-right">Harga Baru</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bulkPreview.map((p) => (
+                      <tr key={p.product_id} className="border-t border-[#eef1f1]">
+                        <td className="px-4 py-2 font-medium text-[#1b1e20]">{p.nama}</td>
+                        <td className="px-4 py-2 text-right text-[#8b9895]">
+                          {formatRupiah(p.harga_lama)}
+                        </td>
+                        <td className={cn('px-4 py-2 text-right font-bold', bulkJenis === 'naik' ? 'text-[#0a7c72]' : 'text-[#d63f2f]')}>
+                          {formatRupiah(p.harga_baru)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <button
+                type="button"
+                disabled={bulkSubmitting}
+                onClick={() => void handleBulkSubmit()}
+                className="w-full rounded-[14px] bg-[#0a7c72] py-3 font-bold text-white shadow-[0_8px_18px_rgba(10,124,114,0.22)] disabled:opacity-50"
+              >
+                {bulkSubmitting ? 'Menyimpan...' : `Terapkan ke ${bulkPreview.length} Produk`}
+              </button>
+            </div>
+          )}
+        </div>
+      </Modal>
     </main>
   )
 }

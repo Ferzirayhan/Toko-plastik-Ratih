@@ -30,9 +30,16 @@ export function CartItem({ item, onDecrease, onIncrease, onRemove, onSetQty }: C
             <p className="line-clamp-2 text-[15px] font-extrabold tracking-[-0.02em] text-[#1b1e20]">
               {item.nama_produk}
             </p>
-            <p className="mt-1 text-xs font-medium text-[#8b9895]">
-              {formatRupiah(item.harga_satuan)}
-            </p>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <p className="text-xs font-medium text-[#8b9895]">
+                {formatRupiah(item.harga_satuan)}
+              </p>
+              {item.diskon_item_persen > 0 && (
+                <span className="rounded-full bg-[#e6f9f7] px-2 py-0.5 text-[10px] font-extrabold text-[#0a7c72]">
+                  Diskon {item.diskon_item_persen}%
+                </span>
+              )}
+            </div>
           </div>
           <button
             type="button"

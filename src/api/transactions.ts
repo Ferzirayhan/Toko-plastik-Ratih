@@ -24,6 +24,7 @@ export interface TransactionCartItem {
   hargaSatuan: number
   qty: number
   subtotal: number
+  diskonItemPersen?: number
 }
 
 export interface CreateTransactionInput {
@@ -188,6 +189,7 @@ export async function createTransaction(
         harga_satuan: item.hargaSatuan,
         qty: item.qty,
         subtotal: item.subtotal,
+        diskon_item_persen: item.diskonItemPersen ?? 0,
       })),
     ),
     p_kasir_id: kasirId,
