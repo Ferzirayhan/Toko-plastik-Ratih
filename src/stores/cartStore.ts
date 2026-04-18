@@ -35,7 +35,9 @@ function calculateCartState(state: Pick<CartStore, 'items' | 'diskon_persen' | '
   const diskonAmount = Math.round(subtotal * (state.diskon_persen / 100))
   const taxableAmount = Math.max(subtotal - diskonAmount, 0)
   const ppnAmount = state.use_ppn ? Math.round(taxableAmount * (state.ppn_persen / 100)) : 0
-  const total = taxableAmount + ppnAmount
+  const rawTotal = taxableAmount + ppnAmount
+  const hasAnyDiscount = state.diskon_persen > 0 || state.items.some((item) => item.diskon_item_persen > 0)
+  const total = roundSubtotal(rawTotal, hasAnyDiscount)
   const kembalian = Math.max(state.uang_diterima - total, 0)
 
   return {
