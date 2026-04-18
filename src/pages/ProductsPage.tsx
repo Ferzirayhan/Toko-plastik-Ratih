@@ -498,10 +498,8 @@ function CategoryManager({ open, categories, onClose, onSaved }: CategoryManager
 
 function VariantSection({
   rootProduct,
-  categories,
 }: {
   rootProduct: ProductWithCategory
-  categories: Category[]
 }) {
   const pushToast = useToastStore((state) => state.pushToast)
   const [open, setOpen] = useState(false)
@@ -1224,7 +1222,7 @@ function ProductDrawer({
             </div>
 
             {initialProduct ? (
-              <VariantSection rootProduct={initialProduct} categories={categories} />
+              <VariantSection rootProduct={initialProduct} />
             ) : null}
 
             <div className="grid grid-cols-2 gap-4">
