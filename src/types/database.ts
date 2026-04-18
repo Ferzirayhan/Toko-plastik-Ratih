@@ -75,6 +75,7 @@ export interface Database {
           harga_beli: number | null
           harga_jual: number
           diskon_produk_persen: number | null
+          product_group_id: number | null
           stok: number | null
           stok_minimum: number | null
           foto_url: string | null
@@ -93,6 +94,7 @@ export interface Database {
           harga_beli?: number | null
           harga_jual: number
           diskon_produk_persen?: number | null
+          product_group_id?: number | null
           stok?: number | null
           stok_minimum?: number | null
           foto_url?: string | null
@@ -111,6 +113,7 @@ export interface Database {
           harga_beli?: number | null
           harga_jual?: number
           diskon_produk_persen?: number | null
+          product_group_id?: number | null
           stok?: number | null
           stok_minimum?: number | null
           foto_url?: string | null
@@ -386,6 +389,7 @@ export interface Database {
           harga_beli: number | null
           harga_jual: number | null
           diskon_produk_persen: number | null
+          product_group_id: number | null
           stok: number | null
           stok_minimum: number | null
           foto_url: string | null

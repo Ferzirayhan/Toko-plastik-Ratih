@@ -5,9 +5,10 @@ import { cn } from '../../utils/cn'
 interface ProductCardProps {
   product: ProductWithCategory
   onAdd: (product: ProductWithCategory) => void
+  variantSatuans?: string[]
 }
 
-export function ProductCard({ product, onAdd }: ProductCardProps) {
+export function ProductCard({ product, onAdd, variantSatuans }: ProductCardProps) {
   const stok = Number(product.stok ?? 0)
   const stokMinimum = Number(product.stok_minimum ?? 0)
   const isOutOfStock = stok <= 0
@@ -64,6 +65,18 @@ export function ProductCard({ product, onAdd }: ProductCardProps) {
         <p className="mt-1 line-clamp-1 text-[13px] font-medium text-[#8b9895]">
           {product.category_nama ?? 'Tanpa kategori'} • {product.satuan ?? 'pcs'}
         </p>
+        {variantSatuans && variantSatuans.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            <span className="rounded-full bg-[#e7f8f6] px-2 py-0.5 text-[10px] font-extrabold text-[#0a7c72]">
+              {product.satuan}
+            </span>
+            {variantSatuans.map((s) => (
+              <span key={s} className="rounded-full bg-[#f1f3f5] px-2 py-0.5 text-[10px] font-bold text-[#6d7a77]">
+                {s}
+              </span>
+            ))}
+          </div>
+        )}
         {(product.diskon_produk_persen ?? 0) > 0 ? (
           <div className="mt-2 space-y-0.5">
             <div className="flex items-center gap-1.5">

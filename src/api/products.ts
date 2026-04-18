@@ -444,6 +444,107 @@ export async function bulkUpdateProductPrices(
   return Number(data ?? 0)
 }
 
+export interface ProductVariantInput {
+  satuan: string
+  harga_beli: number
+  harga_jual: number
+  stok?: number
+  stok_minimum?: number
+  sku?: string | null
+  barcode?: string | null
+  diskon_produk_persen?: number
+}
+
+export async function getProductVariants(
+  groupId: number,
+): Promise<ProductWithCategory[]> {
+  const { data, error } = await supabase
+    .from('products_with_category')
+    .select('*')
+    .eq('product_group_id', groupId)
+    .order('satuan', { ascending: true })
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  return data ?? []
+}
+
+export async function getAllProductVariantsMap(): Promise<Record<number, ProductWithCategory[]>> {
+  const { data, error } = await supabase
+    .from('products_with_category')
+    .select('*')
+    .not('product_group_id', 'is', null)
+    .eq('is_active', true)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  const map: Record<number, ProductWithCategory[]> = {}
+  for (const p of data ?? []) {
+    const gid = Number(p.product_group_id)
+    if (!map[gid]) map[gid] = []
+    map[gid].push(p)
+  }
+  return map
+}
+
+export async function createProductVariant(
+  rootProduct: ProductWithCategory,
+  variant: ProductVariantInput,
+): Promise<Product> {
+  const rootId = rootProduct.id ?? 0
+  if (!rootId) throw new Error('Produk induk tidak valid')
+
+  const payload: import('../types/database').Database['public']['Tables']['products']['Insert'] = {
+    nama: rootProduct.nama ?? 'Produk',
+    category_id: rootProduct.category_id,
+    satuan: variant.satuan as import('../types/database').SatuanType,
+    harga_beli: variant.harga_beli,
+    harga_jual: variant.harga_jual,
+    stok: variant.stok ?? 0,
+    stok_minimum: variant.stok_minimum ?? 0,
+    sku: variant.sku ?? null,
+    barcode: variant.barcode ?? null,
+    diskon_produk_persen: variant.diskon_produk_persen ?? 0,
+    product_group_id: rootId,
+    is_active: true,
+  }
+
+  const { data, error } = await supabase
+    .from('products')
+    .insert(payload)
+    .select('*')
+    .single()
+
+  if (error) {
+    if (error.code === '23505') throw new Error('SKU atau barcode sudah dipakai produk lain.')
+    throw new Error(error.message)
+  }
+
+  // Mark root product as part of the group (product_group_id = root.id)
+  await supabase
+    .from('products')
+    .update({ product_group_id: rootId })
+    .eq('id', rootId)
+    .is('product_group_id', null)
+
+  return data
+}
+
+export async function deleteProductVariant(variantId: number): Promise<void> {
+  const { error } = await supabase
+    .from('products')
+    .update({ product_group_id: null, is_active: false })
+    .eq('id', variantId)
+
+  if (error) {
+    throw new Error(error.message)
+  }
+}
+
 export async function getProductPriceHistory(
   productId: number,
 ): Promise<ProductPriceHistory[]> {
